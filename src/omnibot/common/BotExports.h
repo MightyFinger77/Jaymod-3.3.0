@@ -58,6 +58,8 @@ extern "C" const char *OB_VA(const char* _msg, ...);
 //////////////////////////////////////////////////////////////////////////
 
 eomnibot_error Omnibot_LoadLibrary(int version, const char *lib, const char *path);
+eomnibot_error Omnibot_GuardedInitialize(int version);
+void Omnibot_GuardedShutdown(void);
 void Omnibot_FreeLibrary();
 bool IsOmnibotLoaded();
 const char *Omnibot_ErrorString(eomnibot_error err);

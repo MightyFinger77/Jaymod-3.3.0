@@ -2143,6 +2143,7 @@ typedef struct {
 
 	int					dbMode;
 	qboolean			dbShowing;
+	qboolean			dbReady;
 	qboolean			dbAccuraciesRecieved;
 	qboolean			dbPlayerKillsDeathsRecieved;
 	qboolean			dbWeaponStatsRecieved;
@@ -2156,6 +2157,14 @@ typedef struct {
 	int					dbWeaponListOffset;
 	cg_weaponstats_t	dbWeaponStats[WS_MAX];
 	int					dbChatMode;
+	int					mapVoteCount;
+	char				mapVoteName[MAX_MAPVOTE_MAPS][MAX_QPATH];
+	char				mapVoteLong[MAX_MAPVOTE_MAPS][64];
+	int					mapVoteTally[MAX_MAPVOTE_MAPS];
+	int					mapVotePicked;
+	int					mapVoteListOffset;
+	int					mapVoteFlags;
+	int					mapVoteFor[3];
 
 	int					tdbAxisMapsXP[SK_NUM_SKILLS][MAX_MAPS_PER_CAMPAIGN];
 	int					tdbAlliedMapsXP[SK_NUM_SKILLS][MAX_MAPS_PER_CAMPAIGN];
@@ -2237,6 +2246,8 @@ extern	vmCvar_t		cg_tracerSpeed;
 extern	vmCvar_t		cg_autoswitch;
 extern	vmCvar_t		cg_ignore;
 extern	vmCvar_t		cg_fov;
+extern	vmCvar_t		cg_fixedAspect;
+extern	vmCvar_t		jay_fixedAspect;
 extern	vmCvar_t		cg_zoomFov;
 extern	vmCvar_t		cg_zoomDefaultBinoc;
 extern	vmCvar_t		cg_zoomDefaultSniper;
@@ -2417,6 +2428,7 @@ extern	vmCvar_t		cg_optimizePrediction;
 //
 qboolean CG_Cvar_ClampInt( const char *name, vmCvar_t *vmCvar, int min, int max );
 void CG_ParseSkillLevels( void);
+void CG_ParseWeaponAmmo( void );
 const char *CG_ConfigString( int index );
 int CG_ConfigStringCopy( int index, char* buff, int buffsize );
 const char *CG_Argv( int arg );
@@ -2474,8 +2486,11 @@ void CG_Letterbox( float xsize, float ysize, qboolean center );
 //
 // cg_drawtools.c
 //
+qboolean CG_UseFixedAspect(void);
+void CG_ApplyFixedAspectScale(void);
 void CG_RestrictScreenWidth(bool restrict);
 bool CG_IsScreenWidthRestricted();
+void CG_DrawSideBars(const float *color);
 void CG_LerpColor2(vec4_t color1, vec4_t color2, vec4_t result, float factor);
 void CG_LerpColor3(vec4_t color1, vec4_t color2, vec4_t color3, vec4_t result, float factor);
 void CG_ColorForPercent( float percent, vec4_t hcolor );
@@ -2485,7 +2500,7 @@ void CG_HorizontalPercentBar( float x, float y, float width, float height, float
 void CG_DrawPic( float x, float y, float width, float height, qhandle_t hShader );
 void CG_DrawPicST( float x, float y, float width, float height, float s0, float t0, float s1, float t1, qhandle_t hShader );
 void CG_DrawRotatedPic( float x, float y, float width, float height, qhandle_t hShader, float angle );		// NERVE - SMF
-void CG_DrawChar( int x, int y, int width, int height, int ch );
+void CG_DrawChar( float x, float y, int width, int height, int ch );
 void CG_FilledBar(float x, float y, float w, float h, float *startColor, float *endColor, const float *bgColor, float frac, int flags);
 // JOSEPH 10-26-99
 void CG_DrawStretchPic( float x, float y, float width, float height, qhandle_t hShader );
@@ -2511,6 +2526,8 @@ void CG_DrawBigString2( int x, int y, const char *s, float alpha );
 void CG_DrawBigStringColor2( int x, int y, const char *s, vec4_t color );
 // END JOSEPH
 int CG_DrawStrlen( const char *str );
+float CG_DrawStringPixelWidth( const char *string, int charWidth, int charHeight );
+int CG_CenterX( const char *string, int charWidth, int charHeight );
 
 float	*CG_FadeColor( int startMsec, int totalMsec );
 float *CG_TeamColor( int team );
@@ -3630,6 +3647,11 @@ void CG_DebriefingPlayerWeaponStats_Draw( panel_button_t* button );
 
 void CG_DebriefingXPHeader_Draw( panel_button_t* button );
 
+void CG_ParseMapVote( void );
+void CG_MapVote_List_Draw( panel_button_t* button );
+qboolean CG_MapVote_List_KeyDown( panel_button_t* button, int key );
+void CG_MapVote_VoteButton_Draw( panel_button_t* button );
+qboolean CG_MapVote_VoteButton_KeyDown( panel_button_t* button, int key );
 void CG_DebriefingTitle_Draw( panel_button_t* button );
 void CG_DebriefingPlayerList_Draw( panel_button_t* button );
 qboolean CG_DebriefingPlayerList_KeyDown( panel_button_t* button, int key );

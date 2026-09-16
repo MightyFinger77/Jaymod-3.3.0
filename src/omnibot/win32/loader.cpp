@@ -118,6 +118,14 @@ Omnibot_LoadLibrary( const int version, const char* const libbase, const char* c
     }
 
     // attempt loading
+    const HINSTANCE preexisting = GetModuleHandleA(
+#if defined(_WIN64) || defined(__x86_64__) || defined(__amd64__)
+        "omnibot_et_x64.dll"
+#else
+        "omnibot_et.dll"
+#endif
+    );
+
     for ( list<string>::iterator it = __dirList.begin(); it != end; it++ ) {
         const string& dir = *it;
 
@@ -155,6 +163,9 @@ Omnibot_LoadLibrary( const int version, const char* const libbase, const char* c
     if (!__handle)
         return BOT_ERROR_CANTLOADDLL;
 
+    if (preexisting)
+        G_Printf( "%s reused in-process dll (did not unload with previous qagame)\n", __OMNI_LOG );
+
     // check proper dll and initialize it
     pfnGetFunctionsFromDLL pfnGetBotFuncs = 0;
     memset( &g_BotFunctions, 0, sizeof(g_BotFunctions) );
@@ -174,8 +185,12 @@ Omnibot_LoadLibrary( const int version, const char* const libbase, const char* c
         return oe;
 	}
 
-    oe = g_BotFunctions.pfnInitialize( Bot_GetBotVisibleInterface(), version );
-    g_IsOmnibotLoaded = (oe == BOT_ERROR_NONE);
+    if (preexisting && g_BotFunctions.pfnShutdown) {
+        G_Printf( "%s dropping stale engine interface from previous qagame\n", __OMNI_LOG );
+        Omnibot_GuardedShutdown();
+    }
+
+    oe = Omnibot_GuardedInitialize( version );
 
     G_Printf( "%s initialization: %s\n", __OMNI_LOG, g_IsOmnibotLoaded ? "success" : "failure" );
     return oe;

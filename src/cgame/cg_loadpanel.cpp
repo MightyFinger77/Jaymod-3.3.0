@@ -24,14 +24,14 @@ qhandle_t	bg_mappic;
 
 panel_button_text_t missiondescriptionTxt = {
 	0.2f, 0.2f,
-	{ 0.0f, 0.0f, 0.0f, 1.f },
+	{ 1.0f, 1.0f, 1.0f, 0.9f },
 	0, 0,
 	&bg_loadscreenfont2,
 };
 
 panel_button_text_t missiondescriptionHeaderTxt = {
 	0.2f, 0.2f,
-	{ 0.0f, 0.0f, 0.0f, 0.8f },
+	{ 1.0f, 1.0f, 1.0f, 0.7f },
 	 0,ITEM_ALIGN_CENTER,
 	&bg_loadscreenfont2,
 };
@@ -96,7 +96,7 @@ panel_button_t loadScreenPins = {
 panel_button_t missiondescriptionPanelHeaderText = {
 	NULL,
 	"***TOP SECRET***",
-	{ 440, 72, 200, 32 },
+	{ 440, 200, 200, 32 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	&missiondescriptionHeaderTxt,	/* font		*/
 	NULL,					/* keyDown	*/
@@ -108,7 +108,7 @@ panel_button_t missiondescriptionPanelHeaderText = {
 panel_button_t missiondescriptionPanelText = {
 	NULL,
 	NULL,
-	{ 460, 84, 160, 232 },
+	{ 460, 208, 160, 14 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	&missiondescriptionTxt,	/* font		*/
 	NULL,					/* keyDown	*/
@@ -120,7 +120,7 @@ panel_button_t missiondescriptionPanelText = {
 panel_button_t campaignheaderPanelText = {
 	NULL,
 	NULL,
-	{ 456, 24, 152, 232 },
+	{ 456, 158, 152, 232 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	&campaignpheaderTxt,	/* font		*/
 	NULL,					/* keyDown	*/
@@ -132,7 +132,7 @@ panel_button_t campaignheaderPanelText = {
 panel_button_t campaignPanelText = {
 	NULL,
 	NULL,
-	{ 464, 40, 152, 232 },
+	{ 464, 178, 152, 232 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	&campaignpTxt,			/* font		*/
 	NULL,					/* keyDown	*/
@@ -144,7 +144,7 @@ panel_button_t campaignPanelText = {
 panel_button_t loadScreenMeterBack = {
 	"gfx/loading/progressbar_back",
 	NULL,
-	{ 440+26, 480-30+1, 200-56, 20 },
+	{ 472, 441, 136, 12 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	NULL,	/* font		*/
 	NULL,	/* keyDown	*/
@@ -156,7 +156,7 @@ panel_button_t loadScreenMeterBack = {
 panel_button_t loadScreenMeterBack2 = {
 	"gfx/loading/progressbar",
 	NULL,
-	{ 440+26, 480-30+1, 200-56, 20 },
+	{ 472, 441, 136, 12 },
 	{ 1, 255, 0, 0, 255, 0, 0, 0 },
 	NULL,	/* font		*/
 	NULL,	/* keyDown	*/
@@ -168,7 +168,7 @@ panel_button_t loadScreenMeterBack2 = {
 panel_button_t loadScreenMeterBackText = {
 	NULL,
 	"LOADING",
-	{ 440+28, 480-28+12+1, 200-56-2, 16 },
+	{ 440+34, 441+9, 132, 12 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0 },
 	&loadScreenMeterBackTxt,	/* font		*/
 	NULL,						/* keyDown	*/
@@ -212,11 +212,95 @@ const char* CG_LoadPanel_GameTypeName( gametype_t gt ) {
 			return "Campaign";
 		case GT_WOLF_LMS:
 			return "Last Man Standing";
+		case GT_WOLF_MAPVOTE:
+			return "Map Voting";
 		default:
 			break;
 	}
 
 	return "Invalid";
+}
+
+#define LOADPANEL_MOTD_WIDTH	150.f
+#define LOADPANEL_MOTD_MAXY		378.f
+#define LOADPANEL_MOTD_LINEH	10.f
+
+static qboolean CG_LoadPanel_NextMotdLine( const char **text, char *lastColor, char *out, int outSize, float maxWidth, float scale, fontInfo_t *font )
+{
+	const char *s;
+	const char *start;
+	const char *end;
+	const char *breakAt;
+	char curColor;
+	char breakColor;
+	float w;
+	float useScale;
+	int n;
+	int span;
+
+	s = *text;
+	while( *s == ' ' ) {
+		s++;
+	}
+	if( !*s ) {
+		*text = s;
+		return qfalse;
+	}
+
+	start = s;
+	end = s;
+	breakAt = NULL;
+	curColor = *lastColor;
+	breakColor = curColor;
+	w = 0.f;
+	useScale = scale * font->glyphScale;
+
+	while( *end ) {
+		if( Q_IsColorString( end ) ) {
+			curColor = end[1];
+			end += 2;
+			continue;
+		}
+		w += font->glyphs[(unsigned char)*end].xSkip * useScale;
+		if( w > maxWidth && end > start ) {
+			break;
+		}
+		if( *end == ' ' ) {
+			breakAt = end;
+			breakColor = curColor;
+		}
+		end++;
+	}
+
+	if( *end && breakAt && breakAt > start ) {
+		end = breakAt;
+		curColor = breakColor;
+	}
+
+	n = 0;
+	if( *lastColor && !Q_IsColorString( start ) && n + 2 < outSize ) {
+		out[n++] = Q_COLOR_ESCAPE;
+		out[n++] = *lastColor;
+	}
+	span = end - start;
+	if( n + span >= outSize ) {
+		span = outSize - n - 1;
+	}
+	if( span > 0 ) {
+		memcpy( out + n, start, span );
+		n += span;
+	}
+	out[n] = '\0';
+
+	if( *end == ' ' ) {
+		end++;
+	}
+	while( *end == ' ' ) {
+		end++;
+	}
+	*text = end;
+	*lastColor = curColor;
+	return qtrue;
 }
 
 void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
@@ -262,10 +346,24 @@ void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
 		bg_loadscreeninited = qtrue;
 	}
 
-	CG_RestrictScreenWidth(true);
+	CG_ApplyFixedAspectScale();
+	{
+		static float loadpanel_xshift = 0;
+		float want = (float)SCREEN_X_OFFSET;
+		vec4_t sideColor = { 0.145f, 0.172f, 0.145f, 1.f };
 
-	// Black out the background
-	CG_FillRect( -10, -10, 650, 490, colorBlack );
+		if( want != loadpanel_xshift ) {
+			BG_PanelButtonsShift( loadpanelButtons, want - loadpanel_xshift, 0 );
+			loadpanel_xshift = want;
+		}
+
+		if( SCREEN_X_OFFSET > 0 ) {
+			CG_FillRect( 0, 0, SCREEN_X_OFFSET, 480, sideColor );
+			CG_FillRect( SCREEN_X_OFFSET + 640, 0, SCREEN_X_OFFSET, 480, sideColor );
+		}
+
+		CG_FillRect( SCREEN_X_OFFSET, 0, 640, 480, colorBlack );
+	}
 
 	BG_PanelButtonsRender( loadpanelButtons );
 
@@ -277,7 +375,7 @@ void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
 	if( *buffer ) {
 		const char *str;
 		qboolean enabled = qfalse;
-		float x, y;
+		float y;
 		int i;
 //		vec4_t clr1 = { 41/255.f,	51/255.f,	43/255.f,	204/255.f };
 //		vec4_t clr2 = { 0.f,		0.f,		0.f,		225/255.f };
@@ -289,78 +387,98 @@ void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
 		CG_FillRect( 8, 23, 230, 210, clr2 );
 		CG_DrawRect_FixedBorder( 8, 23, 230, 216, 1, colorMdGrey );*/
 
-		y = 322;
-		CG_Text_Paint_Centred_Ext( 540, y, 0.22f, 0.22f, clr3, JAYMOD_titlex, 0, 0, 0, &bg_loadscreenfont1 );
+		y = 222;
+		CG_Text_Paint_Centred_Ext( SCREEN_X_OFFSET + 540, y, 0.22f, 0.22f, clr3, JAYMOD_titlex, 0, 0, 0, &bg_loadscreenfont1 );
 		
-		y = 340;
+		y = 240;
 		str = Info_ValueForKey( buffer, "sv_hostname" );
-		CG_Text_Paint_Centred_Ext( 540, y, 0.2f, 0.2f, colorWhite, str && *str ? str : "ETHost", 0, 26, 0, &bg_loadscreenfont2 );
+		CG_Text_Paint_Centred_Ext( SCREEN_X_OFFSET + 540, y, 0.2f, 0.2f, colorWhite, str && *str ? str : "ETHost", 0, 26, 0, &bg_loadscreenfont2 );
 		
 		
-		y += 14;
+		y += 28;
 		for( i = 0; i < MAX_MOTDLINES; i++) {
+			const char *p;
+			char lastColor;
+			char line[256];
+
+			if( y > LOADPANEL_MOTD_MAXY ) {
+				break;
+			}
 			str = CG_ConfigString( CS_CUSTMOTD + i );
 			if( !str || !*str ) {
 				break;
 			}
 
-			CG_Text_Paint_Centred_Ext( 540, y, 0.2f, 0.2f, colorWhite, str, 0, 26, 0, &bg_loadscreenfont2 );
-
-			y += 10;
-		}
-
-		y = 417;
-
-		str = Info_ValueForKey( buffer, "g_friendlyfire" );
-		if( str && *str && atoi( str ) ) {
-			x = 461;
-			CG_DrawPic( x, y, 16, 16, bg_filter_ff );
-		}
-
-		if( atoi( Info_ValueForKey( buffer, "g_gametype" ) ) != GT_WOLF_LMS ) {
-			str = Info_ValueForKey( buffer, "g_alliedmaxlives" );
-			if( str && *str && atoi( str ) ) {
-				enabled = qtrue;
-			} else {
-				str = Info_ValueForKey( buffer, "g_axismaxlives" );
-				if( str && *str && atoi( str ) ) {
-					enabled = qtrue;
-				} else {
-					str = Info_ValueForKey( buffer, "g_maxlives" );
-					if( str && *str && atoi( str ) ) {
-						enabled = qtrue;
-					}
-				}
+			p = str;
+			lastColor = 0;
+			while( y <= LOADPANEL_MOTD_MAXY &&
+				   CG_LoadPanel_NextMotdLine( &p, &lastColor, line, sizeof( line ), LOADPANEL_MOTD_WIDTH, 0.2f, &bg_loadscreenfont2 ) ) {
+				CG_Text_Paint_Centred_Ext( SCREEN_X_OFFSET + 540, y, 0.2f, 0.2f, colorWhite, line, 0, 0, 0, &bg_loadscreenfont2 );
+				y += LOADPANEL_MOTD_LINEH;
 			}
 		}
 
-		if( enabled ) {
-			x = 489;
-			CG_DrawPic( x, y, 16, 16, bg_filter_lv );
-		}
-		
-		str = Info_ValueForKey( buffer, "sv_punkbuster" );
-		if( str && *str && atoi( str ) ) {
-			x = 518;
-			CG_DrawPic( x, y, 16, 16, bg_filter_pb );
-		}
+		{
+			qhandle_t icons[6];
+			int nIcons = 0;
+			const int iconSize = 16;
+			const int iconGap = 8;
+			int rowWidth, rowX, iIcon;
 
-		str = Info_ValueForKey( buffer, "g_heavyWeaponRestriction" );
-		if( str && *str && atoi( str ) != 100 ) {
-			x = 546;
-			CG_DrawPic( x, y, 16, 16, bg_filter_hw );
-		}
+			str = Info_ValueForKey( buffer, "g_friendlyfire" );
+			if( str && *str && atoi( str ) ) {
+				icons[nIcons++] = bg_filter_ff;
+			}
 
-		str = Info_ValueForKey( buffer, "g_antilag" );
-		if( str && *str && atoi( str ) ) {
-			x = 575;
-			CG_DrawPic( x, y, 16, 16, bg_filter_al );
-		}
+			if( atoi( Info_ValueForKey( buffer, "g_gametype" ) ) != GT_WOLF_LMS ) {
+				str = Info_ValueForKey( buffer, "g_alliedmaxlives" );
+				if( str && *str && atoi( str ) ) {
+					enabled = qtrue;
+				} else {
+					str = Info_ValueForKey( buffer, "g_axismaxlives" );
+					if( str && *str && atoi( str ) ) {
+						enabled = qtrue;
+					} else {
+						str = Info_ValueForKey( buffer, "g_maxlives" );
+						if( str && *str && atoi( str ) ) {
+							enabled = qtrue;
+						}
+					}
+				}
+			}
 
-		str = Info_ValueForKey( buffer, "g_balancedteams" );
-		if( str && *str && atoi( str ) ) {
-			x = 604;
-			CG_DrawPic( x, y, 16, 16, bg_filter_bt );
+			if( enabled ) {
+				icons[nIcons++] = bg_filter_lv;
+			}
+
+			str = Info_ValueForKey( buffer, "sv_punkbuster" );
+			if( str && *str && atoi( str ) ) {
+				icons[nIcons++] = bg_filter_pb;
+			}
+
+			str = Info_ValueForKey( buffer, "g_heavyWeaponRestriction" );
+			if( str && *str && atoi( str ) != 100 ) {
+				icons[nIcons++] = bg_filter_hw;
+			}
+
+			str = Info_ValueForKey( buffer, "g_antilag" );
+			if( str && *str && atoi( str ) ) {
+				icons[nIcons++] = bg_filter_al;
+			}
+
+			str = Info_ValueForKey( buffer, "g_balancedteams" );
+			if( str && *str && atoi( str ) ) {
+				icons[nIcons++] = bg_filter_bt;
+			}
+
+			if( nIcons > 0 ) {
+				rowWidth = nIcons * iconSize + ( nIcons - 1 ) * iconGap;
+				rowX = SCREEN_X_OFFSET + 440 + ( 200 - rowWidth ) / 2;
+				y = 386;
+				for( iIcon = 0; iIcon < nIcons; iIcon++ ) {
+					CG_DrawPic( rowX + iIcon * ( iconSize + iconGap ), y, iconSize, iconSize, icons[iIcon] );
+				}
+			}
 		}
 	}
 
@@ -374,12 +492,12 @@ void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
 		}
 
 		trap_R_SetColor( colorBlack );
-		CG_DrawPic( 16+1, 2+1, 192, 144, bg_mappic );
+		CG_DrawPic( SCREEN_X_OFFSET + 16+1, 2+1, 192, 144, bg_mappic );
 
 		trap_R_SetColor( NULL );
-		CG_DrawPic( 16, 2, 192, 144, bg_mappic );
+		CG_DrawPic( SCREEN_X_OFFSET + 16, 2, 192, 144, bg_mappic );
 
-		CG_DrawPic( 16+80, 2+6, 20, 20, bg_pin );
+		CG_DrawPic( SCREEN_X_OFFSET + 16+80, 2+6, 20, 20, bg_pin );
 	}
 
 	if( forcerefresh ) {
@@ -387,8 +505,6 @@ void CG_DrawConnectScreen( qboolean interactive, qboolean forcerefresh ) {
 	}
 
 	inside = qfalse;
-
-	CG_RestrictScreenWidth(false);
 }
 
 void CG_LoadPanel_RenderLoadingBar( panel_button_t* button ) {
@@ -422,7 +538,7 @@ void CG_LoadPanel_RenderCampaignTypeText( panel_button_t* button ) {
 
 	str = Info_ValueForKey( buffer, "g_gametype" );
 */
-	CG_Text_Paint_Ext( button->rect.x, button->rect.y, button->font->scalex, button->font->scaley, button->font->colour, va( "%s:", CG_LoadPanel_GameTypeName( cgs.gametype ) ), 0, 0, button->font->style, button->font->font );
+	CG_Text_Paint_Centred_Ext( SCREEN_X_OFFSET + 540, button->rect.y, button->font->scalex, button->font->scaley, button->font->colour, va( "%s:", CG_LoadPanel_GameTypeName( cgs.gametype ) ), 0, 0, button->font->style, button->font->font );
 }
 
 
@@ -547,7 +663,7 @@ void CG_LoadPanel_DrawPin( const char* text, float px, float py, float sx, float
 	// Pin left margin is 4
 	// Pin right margin is 0
 	// Text margin is 4
-	if( px + 20 + w > 440 ) {
+	if( px + 20 + w > SCREEN_X_OFFSET + 440 ) {
 		// x - pinhwidth (16) - pin left margin (4) - w - text margin (4) => x - w - 24
 		DC->fillRect( px - w - 24 + 2, py - (backheight/2.f) + 2, 24 + w, backheight, colourFadedBlack );
 		DC->fillRect( px - w - 24, py - (backheight/2.f), 24 + w, backheight, colorBlack );
@@ -559,7 +675,7 @@ void CG_LoadPanel_DrawPin( const char* text, float px, float py, float sx, float
 
 	DC->drawHandlePic( px - pinsize, py - pinsize, pinsize * 2.f, pinsize * 2.f, shader );
 
-	if( px + 20 + w > 440 ) {
+	if( px + 20 + w > SCREEN_X_OFFSET + 440 ) {
 		// x - pinhwidth (16) - pin left margin (4) - w => x - w - 20
 		DC->drawTextExt( px - w - 20, py + 4, sx, sy, colorWhite, text, 0, 0, 0, &bg_loadscreenfont2 );
 	} else {
@@ -586,7 +702,7 @@ void CG_LoadPanel_RenderCampaignPins( panel_button_t* button ) {
 			return;
 		}
 
-		px = ( cgs.arenaData.mappos[0] / 1024.f ) * 440.f;
+		px = ( cgs.arenaData.mappos[0] / 1024.f ) * 440.f + SCREEN_X_OFFSET;
 		py = ( cgs.arenaData.mappos[1] / 1024.f ) * 480.f;
 
 		CG_LoadPanel_DrawPin( cgs.arenaData.longname, px, py, 0.22f, 0.25f, bg_neutralpin, 16.f, 16.f );
@@ -609,7 +725,7 @@ void CG_LoadPanel_RenderCampaignPins( panel_button_t* button ) {
 				shader = bg_neutralpin;
 			}
 
-			px = ( cgs.campaignData.arenas[i].mappos[0] / 1024.f ) * 440.f;
+			px = ( cgs.campaignData.arenas[i].mappos[0] / 1024.f ) * 440.f + SCREEN_X_OFFSET;
 			py = ( cgs.campaignData.arenas[i].mappos[1] / 1024.f ) * 480.f;
 
 			CG_LoadPanel_DrawPin( cgs.campaignData.arenas[i].longname, px, py, 0.22f, 0.25f, shader, 16.f, 16.f );

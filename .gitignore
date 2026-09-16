@@ -1,5 +1,13 @@
 /build/
-/tools/
+/build-x86/
+/dist/
+/jaymod-3.1.0-64bit-lua/
+*.mmdb
+*.dmp
+*.zip
+*.pk3
+report.cfg
+**/report.cfg
 *.dll
 *.exe
 *.obj
@@ -9,3 +17,13 @@
 *.pdb
 *.exp
 *.ilk
+*.so
+
+# Toolchains / local test data — keep pack-release.ps1 and small scripts
+/tools/mingw32/
+/tools/etl64/
+/tools/testserver/
+/tools/pk3work/
+/tools/pk3cmp/
+/tools/__pycache__/
+/tools/*.zip

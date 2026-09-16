@@ -26,9 +26,19 @@ NextMap::doExecute( Context& txt )
         return PA_USAGE;
 
     switch ((gamestate_t)cvars::gameState.ivalue) {
+        case GS_INTERMISSION:
+            /* Force end vote / intermission (!nextmap). READY also does this. */
+            level.ref_allready = qtrue;
+            level.exitLevelTime = 0;
+            ExitLevel();
+            break;
+
         case GS_WARMUP_COUNTDOWN:
         case GS_WARMUP:
-        case GS_INTERMISSION:
+            if (g_gametype.integer == GT_WOLF_MAPVOTE) {
+                BeginIntermission();
+                break;
+            }
             ExitLevel();
             break;
 

@@ -1722,7 +1722,7 @@ qboolean G_checkReady(void)
 			cl = level.clients + level.sortedClients[i];
 
 			if(cl->pers.connected != CON_CONNECTED || cl->sess.sessionTeam == TEAM_SPECTATOR) continue;
-			else if(cl->pers.ready || (g_entities[level.sortedClients[i]].r.svFlags & SVF_BOT)) ready++;
+			else if(cl->pers.ready || G_IsBot(&g_entities[level.sortedClients[i]])) ready++;
 			else notReady++;
 		}
 	}

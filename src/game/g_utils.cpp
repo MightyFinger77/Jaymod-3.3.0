@@ -495,6 +495,126 @@ void G_InitGentity( gentity_t *e ) {
 	Bot_Queue_EntityCreated(e);
 }
 
+qboolean G_ClientIsLoopback( int clientNum ) {
+	char userinfo[MAX_INFO_STRING];
+	const char *ip;
+
+	if ( clientNum < 0 || clientNum >= MAX_CLIENTS ) {
+		return qfalse;
+	}
+	trap_GetUserinfo( clientNum, userinfo, sizeof( userinfo ) );
+	ip = Info_ValueForKey( userinfo, "ip" );
+	if ( !ip || !ip[0] ) {
+		return qfalse;
+	}
+	if ( !Q_stricmpn( ip, "localhost", 9 ) ) {
+		return qtrue;
+	}
+	if ( !Q_stricmpn( ip, "127.0.0.1", 9 ) ) {
+		return qtrue;
+	}
+	if ( !Q_stricmpn( ip, "::1", 3 ) ) {
+		return qtrue;
+	}
+	return qfalse;
+}
+
+/*
+ * True for Omni-bot / engine bots. Never count these toward intermission
+ * ready percent. SVF_BOT can be dropped; also trust botPush, OMNIBOT guid,
+ * and loopback slots with no cl_mac (Omni-bot never sends a MAC).
+ */
+qboolean G_IsBot( gentity_t *ent ) {
+	int clientNum;
+	char userinfo[MAX_INFO_STRING];
+	const char *guid;
+	const char *ip;
+	const char *mac;
+
+	if ( !ent ) {
+		return qfalse;
+	}
+	if ( ent->r.svFlags & SVF_BOT ) {
+		return qtrue;
+	}
+
+	clientNum = ent - g_entities;
+	if ( clientNum < 0 || clientNum >= MAX_CLIENTS ) {
+		return qfalse;
+	}
+	if ( ent->client && ent->client->sess.botPush ) {
+		ent->r.svFlags |= SVF_BOT;
+		return qtrue;
+	}
+
+	trap_GetUserinfo( clientNum, userinfo, sizeof( userinfo ) );
+	guid = Info_ValueForKey( userinfo, "cl_guid" );
+	if ( guid && guid[0] && !Q_stricmpn( guid, "OMNIBOT", 7 ) ) {
+		ent->r.svFlags |= SVF_BOT;
+		if ( ent->client ) {
+			ent->client->sess.botPush = qtrue;
+		}
+		return qtrue;
+	}
+
+	ip = Info_ValueForKey( userinfo, "ip" );
+	mac = Info_ValueForKey( userinfo, "cl_mac" );
+	if ( ip && ip[0] && ( !Q_stricmpn( ip, "localhost", 9 ) || !Q_stricmpn( ip, "127.0.0.1", 9 ) || !Q_stricmpn( ip, "::1", 3 ) ) ) {
+		if ( !mac || !mac[0] ) {
+			ent->r.svFlags |= SVF_BOT;
+			if ( ent->client ) {
+				ent->client->sess.botPush = qtrue;
+			}
+			return qtrue;
+		}
+	}
+
+	/* Omni-bot AddBot fingerprint (rate/snaps) when guid/ip were rewritten. */
+	{
+		const char *rate = Info_ValueForKey( userinfo, "rate" );
+		const char *snaps = Info_ValueForKey( userinfo, "snaps" );
+		if ( rate && snaps && !Q_stricmp( rate, "25000" ) && !Q_stricmp( snaps, "20" )
+			&& ( !mac || !mac[0] ) && ent->client && ent->client->ps.ping == 0 ) {
+			ent->r.svFlags |= SVF_BOT;
+			ent->client->sess.botPush = qtrue;
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+/*
+ * Count connected humans for intermission ready percent. Bots are ignored.
+ */
+void G_IntermissionHumanCounts( int *readyOut, int *humansOut, int *botsOut ) {
+	int i, ready = 0, humans = 0, bots = 0;
+	gclient_t *cl;
+
+	for ( i = 0; i < level.maxclients; i++ ) {
+		cl = &level.clients[i];
+		if ( cl->pers.connected != CON_CONNECTED ) {
+			continue;
+		}
+		if ( G_IsBot( &g_entities[i] ) ) {
+			bots++;
+			continue;
+		}
+		humans++;
+		if ( cl->pers.ready || ( cl->ps.eFlags & EF_READY ) ) {
+			ready++;
+		}
+	}
+	if ( readyOut ) {
+		*readyOut = ready;
+	}
+	if ( humansOut ) {
+		*humansOut = humans;
+	}
+	if ( botsOut ) {
+		*botsOut = bots;
+	}
+}
+
 /*
  * Spawn a new game entity.
  * Either finds a free entity or expands the level's current high watermark

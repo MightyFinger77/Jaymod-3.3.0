@@ -847,6 +847,7 @@ typedef struct {
 //unlagged - true ping
 
 	int			joinedTeamTime;
+	int			mapVote[3];
 } clientPersistant_t;
 
 typedef struct {
@@ -1144,6 +1145,7 @@ typedef struct {
 										// frag can be watched.  Disable future
 										// kills during this delay
 	int			intermissiontime;		// time the intermission was started
+	int			exitLevelTime;			// level.time when ExitLevel last ran (stuck recovery)
 	char		*changemap;
 	int			exitTime;
 	vec3_t		intermission_origin;	// also used for spectator spawns
@@ -1379,7 +1381,7 @@ void G_SpawnItem (gentity_t *ent, gitem_t *item);
 void FinishSpawningItem( gentity_t *ent );
 void Think_Weapon (gentity_t *ent);
 int ArmorIndex (gentity_t *ent);
-void Fill_Clip (playerState_t *ps, int weapon);
+void Fill_Clip (playerState_t *ps, int weapon, int *skill = NULL, const float *skillpoints = NULL);
 int Add_Ammo (gentity_t *ent, int weapon, int count, qboolean fillClip);
 void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace);
 qboolean AddMagicAmmo(gentity_t *receiver, int numOfClips);
@@ -1419,6 +1421,9 @@ void	G_UseTargets (gentity_t *ent, gentity_t *activator);
 void	G_SetMovedir ( vec3_t angles, vec3_t movedir);
 
 void	G_InitGentity( gentity_t *e );
+qboolean G_IsBot( gentity_t *ent );
+qboolean G_ClientIsLoopback( int clientNum );
+void G_IntermissionHumanCounts( int *readyOut, int *humansOut, int *botsOut );
 gentity_t	*G_Spawn (void);
 gentity_t *G_TempEntity( const vec3_t origin, int event );
 gentity_t* G_PopupMessage( popupMessageType_t type );
@@ -1576,6 +1581,12 @@ void SetClientViewAngle( gentity_t *ent, vec3_t angle );
 gentity_t *SelectSpawnPoint ( const vec3_t avoidPoint, vec3_t origin, vec3_t angles );
 void respawn (gentity_t *ent);
 void BeginIntermission (void);
+void G_MapVote_Init( void );
+void G_MapVote_BeginIntermission( void );
+void G_MapVote_Command( gentity_t *ent );
+qboolean G_MapVote_EnoughVoted( void );
+const char *G_MapVote_WinningMap( void );
+const char *G_MapVote_NextInPool( void );
 void InitClientPersistant (gclient_t *client);
 void InitClientResp (gclient_t *client);
 void InitBodyQue (void);
@@ -1668,7 +1679,10 @@ void G_Say( gentity_t *ent, gentity_t *target, int mode, const char *chatText );
 //
 // Jaybird
 void CheckVote( void );
+void CheckIntermissionExit( void );
 void ExitLevel(void);
+void G_SkipIntermission( void );
+qboolean G_ResolveNextMapName( char *out, int outSize );
 void InitCensorStructure( void );
 void FindIntermissionPoint( void );
 void G_RunThink (gentity_t *ent);
@@ -2677,6 +2691,7 @@ qboolean weapon_checkAirStrike( gentity_t *ent );
 
 
 void G_MakeReady( gentity_t* ent );
+void Cmd_IntermissionReady_f( gentity_t* ent );
 void G_MakeUnready( gentity_t* ent );
 
 void SetPlayerSpawn( gentity_t* ent, int spawn, qboolean update );
@@ -2735,6 +2750,7 @@ qboolean G_LandmineSnapshotCallback( int entityNum, int clientNum );
 #include <game/cmd/public.h>
 #include <game/cvar/public.h>
 #include <game/str/public.h>
+#include <game/enh/enh.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 

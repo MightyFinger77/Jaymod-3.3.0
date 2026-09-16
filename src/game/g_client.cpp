@@ -711,6 +711,10 @@ AddExtraSpawnAmmo
 */
 static void AddExtraSpawnAmmo( gclient_t *client, weapon_t weaponNum)
 {
+	// XML <weaponammo> tiers own the ammo curve for this gun.
+	if( weaponNum > WP_NONE && weaponNum < WP_NUM_WEAPONS && bg_weaponAmmoOverride[weaponNum].used )
+		return;
+
 	switch( weaponNum ) {
 		//case WP_KNIFE:
 		case WP_LUGER:
@@ -1825,22 +1829,42 @@ void ClientUserinfoChanged( int clientNum ) {
 
     // send over a subset of the userinfo keys so other clients can
     // print scoreboards, display models, and play custom sounds
-    s = va( "n\\%s\\t\\%i\\c\\%i\\r\\%i\\m\\%s\\s\\%s\\dn\\%s\\dr\\%i\\w\\%i\\lw\\%i\\sw\\%i\\mu\\%i\\ref\\%i\\sc\\%i",
-        client->pers.netname, 
-        client->sess.sessionTeam, 
-        client->sess.playerType, 
-        client->sess.rank, 
-        medalStr,
-        skillStr,
-        client->disguiseNetname,
-        client->disguiseRank,
-        client->sess.playerWeapon,
-        client->sess.latchPlayerWeapon,
-        client->sess.latchPlayerWeapon2,
-        connectedUsers[clientNum]->muted ? 1 : 0,
-        client->sess.referee,
-        client->sess.shoutcaster
-    );
+    if (cvars::g_countryflags.ivalue && Enh_CountryId(clientNum) > 0) {
+        s = va( "n\\%s\\t\\%i\\c\\%i\\r\\%i\\m\\%s\\s\\%s\\dn\\%s\\dr\\%i\\w\\%i\\lw\\%i\\sw\\%i\\mu\\%i\\ref\\%i\\sc\\%i\\u\\%i",
+            client->pers.netname,
+            client->sess.sessionTeam,
+            client->sess.playerType,
+            client->sess.rank,
+            medalStr,
+            skillStr,
+            client->disguiseNetname,
+            client->disguiseRank,
+            client->sess.playerWeapon,
+            client->sess.latchPlayerWeapon,
+            client->sess.latchPlayerWeapon2,
+            connectedUsers[clientNum]->muted ? 1 : 0,
+            client->sess.referee,
+            client->sess.shoutcaster,
+            Enh_CountryId(clientNum)
+        );
+    } else {
+        s = va( "n\\%s\\t\\%i\\c\\%i\\r\\%i\\m\\%s\\s\\%s\\dn\\%s\\dr\\%i\\w\\%i\\lw\\%i\\sw\\%i\\mu\\%i\\ref\\%i\\sc\\%i",
+            client->pers.netname,
+            client->sess.sessionTeam,
+            client->sess.playerType,
+            client->sess.rank,
+            medalStr,
+            skillStr,
+            client->disguiseNetname,
+            client->disguiseRank,
+            client->sess.playerWeapon,
+            client->sess.latchPlayerWeapon,
+            client->sess.latchPlayerWeapon2,
+            connectedUsers[clientNum]->muted ? 1 : 0,
+            client->sess.referee,
+            client->sess.shoutcaster
+        );
+    }
 
     trap_GetConfigstring( CS_PLAYERS + clientNum, oldname, sizeof( oldname ) );
     trap_SetConfigstring( CS_PLAYERS + clientNum, s );
@@ -1943,6 +1967,13 @@ ClientConnect( string& outmsg, int clientNum, qboolean firstTime, qboolean isBot
 
 	// Get GUID
 	guid = Info_ValueForKey(userinfo, "cl_guid");
+
+	/* Engine GAME_CLIENT_CONNECT can pass isBot=false for Omni-bot after
+	 * AddBot already ran ClientConnect. Trust the OMNIBOT guid prefix. */
+	if ( !Q_stricmpn( guid.c_str(), "OMNIBOT", 7 ) ) {
+		isBot = qtrue;
+		ent->r.svFlags |= SVF_BOT;
+	}
 
 	// Check GUID
     bool fakeguid = false;
@@ -2172,6 +2203,7 @@ ClientConnect( string& outmsg, int clientNum, qboolean firstTime, qboolean isBot
 
 		ent->r.svFlags |= SVF_BOT;
 		ent->inuse = qtrue;
+		client->sess.botPush = qtrue;
 	} else if( firstTime ) {
 		// force into spectator
 		client->sess.sessionTeam = TEAM_SPECTATOR;
@@ -2197,6 +2229,7 @@ ClientConnect( string& outmsg, int clientNum, qboolean firstTime, qboolean isBot
 	G_LogPrintf( "ClientConnect: %i\n", clientNum );
 	G_UpdateCharacter( client );
 	Bot_Event_ClientConnected(clientNum, isBot);
+	Enh_BindCountry( ent, isBot );
 	ClientUserinfoChanged( clientNum );
 
 	// don't do the "xxx connected" messages if they were caried over from previous level
@@ -2204,6 +2237,7 @@ ClientConnect( string& outmsg, int clientNum, qboolean firstTime, qboolean isBot
 	if ( firstTime )
 	{
 		trap_SendServerCommand( -1, va("cpm \"%s" S_COLOR_WHITE " connected\n\"", client->pers.netname) );
+		Enh_ClientConnect( ent, firstTime, isBot );
 	}
 
 	// Jaybird
@@ -2264,7 +2298,11 @@ void ClientBegin( int clientNum )
 		trap_UnlinkEntity( ent );
 	}
 
-	G_InitGentity( ent );
+	{
+		const int botFlags = ent->r.svFlags & SVF_BOT;
+		G_InitGentity( ent );
+		ent->r.svFlags |= botFlags;
+	}
 	ent->touch = 0;
 	ent->pain = 0;
 	ent->client = client;
@@ -2295,9 +2333,12 @@ void ClientBegin( int clientNum )
 	client->pers.complaintClient = -1;
 	client->pers.complaintEndTime = -1;
 
-	//Omni-bot
+	//Omni-bot — once marked a bot, stay a bot for this session
 	client->sess.botSuicide = qfalse;
-	client->sess.botPush = (ent->r.svFlags & SVF_BOT) ? qtrue : qfalse;
+	if ( ( ent->r.svFlags & SVF_BOT ) || client->sess.botPush || G_IsBot( ent ) ) {
+		ent->r.svFlags |= SVF_BOT;
+		client->sess.botPush = qtrue;
+	}
 
 	// Jaybird - shrubbot shortcuts
     Q_strncpyz(client->pers.lastammo, "nobody", sizeof(client->pers.lastammo));
@@ -2402,6 +2443,7 @@ void ClientBegin( int clientNum )
 	// OSP
 
 	g_clientObjects[clientNum].notifyBegin();
+	Enh_ClientBegin( ent );
 
 #ifdef FEATURE_LUA
 	G_LuaHook_ClientBegin( clientNum );
@@ -2711,7 +2753,8 @@ void ClientSpawn( gentity_t *ent, qboolean revived )
 	//		Bot_Event_Spawn(client->ps.clientNum);
 	//}
 
-	SetWolfSpawnWeapons( client ); 
+	SetWolfSpawnWeapons( client );
+	Enh_ApplySpawn( client ); 
 	
 	// START	Mad Doctor I changes, 8/17/2002
 

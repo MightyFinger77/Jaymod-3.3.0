@@ -432,6 +432,28 @@ icons/iconw_fg42_1_select
     }
 }
 
+gfx/loading/camp_side
+{
+	nomipmaps
+	nopicmip
+	{
+		clampmap gfx/loading/camp_side
+		rgbGen identity
+	}
+}
+
+gfx/loading/jaymod_coin
+{
+	nomipmaps
+	nopicmip
+	{
+		clampmap gfx/loading/jaymod_coin
+		blendfunc blend
+		rgbGen vertex
+		alphaGen vertex
+	}
+}
+
 icons/iconw_radio_1_select
 {
     nomipmaps

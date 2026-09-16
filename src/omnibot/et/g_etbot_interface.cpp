@@ -5306,17 +5306,97 @@ int Bot_Interface_Init()
 	return false;
 }
 
+#if defined(_WIN32)
+static jmp_buf g_obJmp;
+static volatile LONG g_obGuard;
+static bool g_obUpdateDisabled;
+static DWORD g_obLastCode;
+static PVOID g_obVeh;
+
+static LONG CALLBACK OmnibotVeh(PEXCEPTION_POINTERS info)
+{
+	if (!g_obGuard)
+		return EXCEPTION_CONTINUE_SEARCH;
+	const DWORD code = info->ExceptionRecord->ExceptionCode;
+	if (code == EXCEPTION_ACCESS_VIOLATION
+		|| code == EXCEPTION_ILLEGAL_INSTRUCTION
+		|| code == EXCEPTION_INT_DIVIDE_BY_ZERO
+		|| code == EXCEPTION_STACK_OVERFLOW)
+	{
+		g_obLastCode = code;
+		longjmp(g_obJmp, 1);
+	}
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void OmnibotEnsureVeh()
+{
+	if (!g_obVeh)
+		g_obVeh = AddVectoredExceptionHandler(1, OmnibotVeh);
+}
+#endif
+
+extern bool g_IsOmnibotLoaded;
+
+eomnibot_error Omnibot_GuardedInitialize(int version)
+{
+#if defined(_WIN32)
+	eomnibot_error err = BOT_ERROR_NONE;
+	OmnibotEnsureVeh();
+	g_obUpdateDisabled = false;
+	if (setjmp(g_obJmp) != 0) {
+		InterlockedExchange(&g_obGuard, 0);
+		g_obUpdateDisabled = true;
+		G_Printf(S_COLOR_RED "OMNIBOT: native fault 0x%08lx in pfnInitialize (stale qagame after map change). Bots disabled this map.\n",
+			(unsigned long)g_obLastCode);
+		g_IsOmnibotLoaded = false;
+		return BOT_ERROR_CANTINITBOT;
+	}
+#if defined(_WIN64)
+	g_obThunkName = "pfnInitialize";
+#endif
+	InterlockedExchange(&g_obGuard, 1);
+	err = g_BotFunctions.pfnInitialize(Bot_GetBotVisibleInterface(), version);
+	InterlockedExchange(&g_obGuard, 0);
+	g_IsOmnibotLoaded = (err == BOT_ERROR_NONE);
+	return err;
+#else
+	eomnibot_error err = g_BotFunctions.pfnInitialize(Bot_GetBotVisibleInterface(), version);
+	g_IsOmnibotLoaded = (err == BOT_ERROR_NONE);
+	return err;
+#endif
+}
+
+void Omnibot_GuardedShutdown(void)
+{
+	if (!g_BotFunctions.pfnShutdown) {
+		return;
+	}
+#if defined(_WIN32)
+	OmnibotEnsureVeh();
+	if (setjmp(g_obJmp) != 0) {
+		InterlockedExchange(&g_obGuard, 0);
+		G_Printf(S_COLOR_YELLOW "OMNIBOT: native fault 0x%08lx in pfnShutdown. Continuing unload.\n",
+			(unsigned long)g_obLastCode);
+		return;
+	}
+#if defined(_WIN64)
+	g_obThunkName = "pfnShutdown";
+#endif
+	InterlockedExchange(&g_obGuard, 1);
+	g_BotFunctions.pfnShutdown();
+	InterlockedExchange(&g_obGuard, 0);
+#else
+	g_BotFunctions.pfnShutdown();
+#endif
+}
+
 int Bot_Interface_Shutdown()
 {
-	if(IsOmnibotLoaded())
-	{
-		g_BotFunctions.pfnShutdown();
-	}
+	Omnibot_GuardedShutdown();
 	Omnibot_FreeLibrary();
 	return 1;
 }
-
-//////////////////////////////////////////////////////////////////////////
 
 void Bot_Interface_ConsoleCommand()
 {
@@ -5363,36 +5443,6 @@ void Bot_Interface_ConsoleCommand()
 }
 
 void script_mover_spawn(gentity_t *ent);
-
-#if defined(_WIN32)
-static jmp_buf g_obJmp;
-static volatile LONG g_obGuard;
-static bool g_obUpdateDisabled;
-static DWORD g_obLastCode;
-static PVOID g_obVeh;
-
-static LONG CALLBACK OmnibotVeh(PEXCEPTION_POINTERS info)
-{
-	if (!g_obGuard)
-		return EXCEPTION_CONTINUE_SEARCH;
-	const DWORD code = info->ExceptionRecord->ExceptionCode;
-	if (code == EXCEPTION_ACCESS_VIOLATION
-		|| code == EXCEPTION_ILLEGAL_INSTRUCTION
-		|| code == EXCEPTION_INT_DIVIDE_BY_ZERO
-		|| code == EXCEPTION_STACK_OVERFLOW)
-	{
-		g_obLastCode = code;
-		longjmp(g_obJmp, 1);
-	}
-	return EXCEPTION_CONTINUE_SEARCH;
-}
-
-static void OmnibotEnsureVeh()
-{
-	if (!g_obVeh)
-		g_obVeh = AddVectoredExceptionHandler(1, OmnibotVeh);
-}
-#endif
 
 void Bot_Interface_Update()
 {

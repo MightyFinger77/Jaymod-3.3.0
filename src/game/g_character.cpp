@@ -94,6 +94,10 @@ static qboolean G_ParseAnimationFiles( bg_character_t *character, const char *an
 	fileHandle_t	f;
 	int				len;
 
+	if( !character || !character->animModelInfo ) {
+		return qfalse;
+	}
+
 	// set the name of the animationGroup and animationScript in the animModelInfo structure
 	Q_strncpyz( character->animModelInfo->animationGroup, animationGroup, sizeof(character->animModelInfo->animationGroup) );
 	Q_strncpyz( character->animModelInfo->animationScript, animationScript, sizeof(character->animModelInfo->animationScript) );
@@ -184,6 +188,9 @@ qboolean G_RegisterCharacter( const char *characterFile, bg_character_t *charact
 
 	// Parse Animation Files
 	if( !G_CheckForExistingAnimModelInfo( characterDef.animationGroup, characterDef.animationScript, &character->animModelInfo ) ) {
+		if( !character->animModelInfo ) {
+			return qfalse;
+		}
 		if( !G_ParseAnimationFiles( character, characterDef.animationGroup, characterDef.animationScript ) ) {
 			G_Printf( S_COLOR_YELLOW "WARNING: failed to load animation files referenced from '%s'\n", characterFile );
 			return qfalse;

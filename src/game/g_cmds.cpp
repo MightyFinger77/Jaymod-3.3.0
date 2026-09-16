@@ -2140,6 +2140,11 @@ qboolean Cmd_CallVote_f( gentity_t *ent, unsigned int dwCommand, qboolean fRefCo
 	trap_Argv( 1, arg1, sizeof( arg1 ) );
 	trap_Argv( 2, arg2, sizeof( arg2 ) );
 
+	if( !fRefCommand && !Enh_CallVoteAllowed( ent, arg1 ) ) {
+		G_printFull("Voting is limited to map votes on this server.", ent);
+		return qfalse;
+	}
+
 	char badChars[] = {';', '\r', '\n'};
 
 	for (int i = 0; i < 3; i++) {
@@ -3333,11 +3338,22 @@ void G_MakeUnready( gentity_t* ent ) {
 }
 
 void Cmd_IntermissionReady_f ( gentity_t* ent ) {
+	int ready = 0, humans = 0, bots = 0;
+
 	if( !ent || !ent->client ) {
 		return;
 	}
 
+	/* NoQuarter: imready only marks ready. CheckIntermissionExit exits. */
 	G_MakeReady( ent );
+
+	if ( cvars::gameState.ivalue != GS_INTERMISSION && !level.intermissiontime ) {
+		return;
+	}
+
+	G_IntermissionHumanCounts( &ready, &humans, &bots );
+	G_Printf( "Intermission READY from %s: %i/%i humans (%i bots ignored, need %i%%)\n",
+		ent->client->pers.netname, ready, humans, bots, g_intermissionReadyPercent.integer );
 }
 
 void Cmd_IntermissionPlayerKillsDeaths_f ( gentity_t* ent ) {
@@ -3666,6 +3682,9 @@ void ClientCommand( int clientNum ) {
 		return;
 	} else if( !Q_stricmp( cmd, "imready" ) ) {		
 		Cmd_IntermissionReady_f( ent );
+		return;
+	} else if( !Q_stricmp( cmd, "mapvote" ) ) {
+		G_MapVote_Command( ent );
 		return;
 	} else if (Q_stricmp (cmd, "ws") == 0) {
 		Cmd_WeaponStat_f( ent );

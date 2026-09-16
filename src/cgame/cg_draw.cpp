@@ -98,6 +98,15 @@ int CG_Text_Height( const char *text, float scale, int limit ) {
 void CG_Text_PaintChar_Ext(float x, float y, float w, float h, float scalex, float scaley, float s, float t, float s2, float t2, qhandle_t hShader) {
 	w *= scalex;
 	h *= scaley;
+	// Keep glyphs square on widescreen: position with X scale, size from height.
+	if (CG_UseFixedAspect() && !CG_IsScreenWidthRestricted()) {
+		x *= cgs.screenXScale;
+		y *= cgs.screenYScale;
+		w *= cgs.screenYScale;
+		h *= cgs.screenYScale;
+		trap_R_DrawStretchPic( x, y, w, h, s, t, s2, t2, hShader );
+		return;
+	}
 	CG_AdjustFrom640( &x, &y, &w, &h );
 	trap_R_DrawStretchPic( x, y, w, h, s, t, s2, t2, hShader );
 }
@@ -359,13 +368,13 @@ static void CG_DrawGameState() {
         colorText[2] = 0.0f;
         colorText[3] = 1.0f;
 
-        const vec4_t box = {
-            cgs.screenXScale * (SCREEN_WIDTH - iconSize[0]),
+        float box[4] = {
+            SCREEN_WIDTH - iconSize[0],
             0,
-            cgs.screenXScale * iconSize[0],
-            cgs.screenYScale * iconSize[1],
-
+            iconSize[0],
+            iconSize[1],
         };
+        CG_AdjustFrom640( &box[0], &box[1], &box[2], &box[3] );
 
         trap_R_SetColor( colorCorner );
         trap_R_DrawStretchPic( box[0], box[1], box[2], box[3], 0.0f, 0.0f, 1.0f, 1.0f, shaderCorner );
@@ -460,12 +469,13 @@ static void CG_DrawGameState() {
             return;
     }
 
-    const vec4_t box = {
-        cgs.screenXScale * (SCREEN_WIDTH - iconSize[0]),
+    float box[4] = {
+        SCREEN_WIDTH - iconSize[0],
         0,
-        cgs.screenXScale * iconSize[0],
-        cgs.screenYScale * iconSize[1],
+        iconSize[0],
+        iconSize[1],
     };
+    CG_AdjustFrom640( &box[0], &box[1], &box[2], &box[3] );
 
     trap_R_SetColor( colorCorner );
     trap_R_DrawStretchPic( box[0], box[1], box[2], box[3], 0.0f, 0.0f, 1.0f, 1.0f, shaderCorner );
@@ -490,8 +500,8 @@ static void CG_DrawGameState() {
     const string text = oss.str();
 
     console.fontShadowed.drawLine(
-        1 + (int)(cgs.glconfig.vidWidth - cp[0] - ((text.length()*console.fontShadowed.charWidth) / 2.0f)),
-        1 + (int)(cp[1] - (console.fontShadowed.charHeight / 2.0f)),
+        1 + (int)(box[0] + box[2] - cp[0] - ((text.length()*console.fontShadowed.charWidth) / 2.0f)),
+        1 + (int)(box[1] + cp[1] - (console.fontShadowed.charHeight / 2.0f)),
         text,
         colorGreen );
 
@@ -583,7 +593,7 @@ static float CG_DrawSnapshot( float y ) {
 
 	s = va( "time:%i snap:%i cmd:%i", cg.snap->serverTime, 
 		cg.latestSnapshotNum, cgs.serverCommandSequence );
-	w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
+	w = (int)( CG_DrawStringPixelWidth( s, BIGCHAR_WIDTH, BIGCHAR_HEIGHT ) + 0.5f );
 
 	CG_DrawBigString( UPPERRIGHT_X - w, int(y) + 2, s, 1.0F);
 
@@ -849,8 +859,8 @@ static void CG_DrawUpperRight( void ) {
 ===========================================================================================
 */
 
-#define CHATLOC_X 155
-#define CHATLOC_Y 478
+#define CHATLOC_X 200
+#define CHATLOC_Y 480
 #define CHATLOC_TEXT_X (CHATLOC_X + 0.25f * TINYCHAR_WIDTH)
 
 /*
@@ -929,10 +939,10 @@ static void CG_DrawTeamInfo( void ) {
 
             // Jaybird - team flags/icons
             if (cgs.teamChatMsgIcons[i % chatHeight] >= 0) {
-                CG_DrawPic( CHATLOC_X, CHATLOC_Y + 1 - (cgs.teamChatPos - i)*lineHeight, 10, 8, cgs.teamChatMsgIcons[i % chatHeight]);
+                CG_DrawPic( CHATLOC_X, CHATLOC_Y - (cgs.teamChatPos - i)*lineHeight, 10, 8, cgs.teamChatMsgIcons[i % chatHeight]);
             }
 
-			CG_Text_Paint_Ext( CHATLOC_TEXT_X + 10, CHATLOC_Y - (cgs.teamChatPos - i - 1) * lineHeight - 1, 0.2f, 0.2f, hcolor, cgs.teamChatMsgs[i % chatHeight], 0, 0, 0, &cgs.media.limboFont2 );
+			CG_Text_Paint_Ext( CHATLOC_TEXT_X + 10, CHATLOC_Y - (cgs.teamChatPos - i - 1) * lineHeight - 2, 0.2f, 0.2f, hcolor, cgs.teamChatMsgs[i % chatHeight], 0, 0, 0, &cgs.media.limboFont2 );
 		}
 	}
 }
@@ -1132,8 +1142,7 @@ static void CG_DrawDisconnect( void ) {
 
 	// also add text in center of screen
 	s = CG_TranslateString( "Connection Interrupted" ); // bk 010215 - FIXME
-	w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
-	CG_DrawBigString( SCREEN_CENTER - w/2, 100, s, 1.0F);
+	CG_DrawBigString( CG_CenterX( s, BIGCHAR_WIDTH, BIGCHAR_HEIGHT ), 100, s, 1.0F);
 
 	// blink the icon
 	if ( ( cg.time >> 9 ) & 1 ) {
@@ -1583,9 +1592,9 @@ static void CG_DrawBCenterString( void ) {
 		}
 		linebuffer[l] = 0;
 
-		w = cg.bPrintCharWidth * CG_DrawStrlen( linebuffer );
+		w = (int)( CG_DrawStringPixelWidth( linebuffer, cg.bPrintCharWidth, (int)(cg.bPrintCharWidth * 1.5) ) + 0.5f );
 
-		x = ( SCREEN_WIDTH - w ) / 2;
+		x = SCREEN_CENTER - w / 2;
 
 		CG_DrawStringExt( x, y, linebuffer, color, qfalse, qtrue, cg.bPrintCharWidth, (int)(cg.centerPrintCharWidth * 1.5), 0 );
 
@@ -1742,9 +1751,9 @@ static void CG_DrawCenterString( void ) {
 		}
 		linebuffer[l] = 0;
 
-		w = cg.centerPrintCharWidth * CG_DrawStrlen( linebuffer );
+		w = (int)( CG_DrawStringPixelWidth( linebuffer, cg.centerPrintCharWidth, (int)(cg.centerPrintCharWidth * 1.5) ) + 0.5f );
 
-		x = ( SCREEN_WIDTH - w ) / 2;
+		x = SCREEN_CENTER - w / 2;
 
 		CG_DrawStringExt( x, y, linebuffer, color, qfalse, qtrue, cg.centerPrintCharWidth, (int)(cg.centerPrintCharWidth * 1.5), 0 );
 
@@ -2159,8 +2168,15 @@ static void CG_DrawBinocReticle(void) {
 	color[0] = color[1] = color[2] = 0;
 	color[3] = 1;
 
-	if(cgs.media.binocShaderSimple)
-		CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgs.media.binocShaderSimple );
+	if(cgs.media.binocShaderSimple) {
+		if (CG_UseFixedAspect()) {
+			CG_RestrictScreenWidth(true);
+			CG_DrawPic( 0, 0, 640, 480, cgs.media.binocShaderSimple );
+			CG_RestrictScreenWidth(false);
+		} else {
+			CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgs.media.binocShaderSimple );
+		}
+	}
 
 	CG_FillRect (SCREEN_X_OFFSET + 146, 239, 348, 1, color);
 
@@ -2597,7 +2613,7 @@ static void CG_DrawCrosshairNames( void ) {
 
                 // Construct name string
 		        s = va( "[%s] %s %s^7", CG_TranslateString( playerClass ), playerRank, name );
-		        w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+		        w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 
 		        // Draw the name and class (force red for color)
                 CG_DrawSmallStringColor( int(SCREEN_CENTER - w / 2), 170, s, colorRed);
@@ -2661,7 +2677,7 @@ static void CG_DrawCrosshairNames( void ) {
 					break;
 			}
 
-			w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+			w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 			CG_DrawSmallString( int(SCREEN_CENTER - w / 2), 170, s, color[3] );
 			cg.crosshairMine = -1;
 			return;
@@ -2690,7 +2706,7 @@ static void CG_DrawCrosshairNames( void ) {
             // Get the name of the constructible, or bail out
 			s = Info_ValueForKey( CG_ConfigString( CS_CONSTRUCTION_NAMES ), va( "%i", cg.crosshairClientNum ) );
 			if( *s ) {
-				w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+				w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 				CG_DrawSmallStringColor( int(SCREEN_CENTER - w / 2), 170, s, color );
 			}
 
@@ -2712,7 +2728,7 @@ static void CG_DrawCrosshairNames( void ) {
 			return;
 		}
 
-		w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+		w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 		CG_DrawSmallStringColor( int(SCREEN_CENTER - w / 2), 170, s, color );
 
     // Handle players
@@ -2728,7 +2744,7 @@ static void CG_DrawCrosshairNames( void ) {
 				    (cgs.clientinfo[cg.snap->ps.clientNum].cls == PC_FIELDOPS ||
 				    cvars::bg_skills.ivalue & SBS_FOPS)) {
 				    s = CG_TranslateString( "Disguised Enemy!" );
-				    w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+				    w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 				    CG_DrawSmallStringColor( int(SCREEN_CENTER - w / 2), 170, s, color );
 				    return;
                 }
@@ -2750,7 +2766,7 @@ static void CG_DrawCrosshairNames( void ) {
 
                 // Construct name string
 				s = va( "[%s] %s %s^7", CG_TranslateString( playerClass ), playerRank, name );
-				w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+				w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 
 				// Draw the name and class
                 CG_DrawSmallString( int(SCREEN_CENTER - w / 2), 170, s, color[3] );
@@ -2785,7 +2801,7 @@ static void CG_DrawCrosshairNames( void ) {
 
                 // Construct name string
 				s = va( "[%s] %s %s^7", CG_TranslateString( playerClass ), playerRank, name );
-				w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+				w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 
 				// Draw the name and class (force red for color)
                 CG_DrawSmallStringColor( int(SCREEN_CENTER - w / 2), 170, s, colorRed);
@@ -2816,7 +2832,7 @@ static void CG_DrawCrosshairNames( void ) {
 
             // Construct the name string
 		    s = va( "[%s] %s %s", CG_TranslateString( playerClass ), playerRank, name );
-		    w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+		    w = (int)( CG_DrawStringPixelWidth( s, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT ) + 0.5f );
 
 		    // Draw the name and class
 		    CG_DrawSmallString( int(SCREEN_CENTER - w / 2), 170, s, color[3] );
@@ -2897,7 +2913,10 @@ CG_DrawSpectator
 =================
 */
 static void CG_DrawSpectator(void) {
-	CG_DrawBigString( SCREEN_CENTER - 9 * 8, 440, CG_TranslateString( "SPECTATOR" ), 1.f );
+	const char *s = CG_TranslateString( "SPECTATOR" );
+	int w = CG_Text_Width_Ext( s, BIGCHAR_HEIGHT / 65.f, 0, &cgs.media.limboFont2 );
+
+	CG_DrawBigString( SCREEN_CENTER - w / 2, 340, s, 1.f );
 }
 
 /*
@@ -3901,7 +3920,7 @@ static void CG_DrawObjectiveInfo( void ) {
 		}
 		linebuffer[l] = 0;
 
-		w = cg.oidPrintCharWidth * CG_DrawStrlen( linebuffer ) + 10;
+		w = (int)( CG_DrawStringPixelWidth( linebuffer, cg.oidPrintCharWidth, (int)(cg.oidPrintCharWidth * 1.5) ) + 0.5f ) + 10;
 // JPW NERVE
 		if (SCREEN_CENTER - w/2 < x1) {
 			x1 = SCREEN_CENTER - w/2;
@@ -3958,7 +3977,7 @@ static void CG_DrawObjectiveInfo( void ) {
 		}
 		linebuffer[l] = 0;
 
-		w = cg.oidPrintCharWidth * CG_DrawStrlen( linebuffer );
+		w = (int)( CG_DrawStringPixelWidth( linebuffer, cg.oidPrintCharWidth, (int)(cg.oidPrintCharWidth * 1.5) ) + 0.5f );
 		if ( x1 + w > x2 )
 			x2 = x1 + w;
 
@@ -4982,7 +5001,9 @@ static void CG_Draw2D( void ) {
 
 	if( !cg.cameraMode ) {
 		CG_DrawFlashBlendBehindHUD();
+	}
 
+	if( !cg.cameraMode ) {
 		if ( cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ) {
 			CG_DrawSpectator();
 			CG_DrawCrosshair();

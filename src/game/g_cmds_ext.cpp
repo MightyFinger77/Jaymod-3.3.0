@@ -372,7 +372,16 @@ void G_ready_cmd(gentity_t *ent, unsigned int dwCommand, qboolean state)
 {
 	char *status[2] = { " NOT", "" };
 
-	if(cvars::gameState.ivalue == GS_PLAYING || cvars::gameState.ivalue == GS_INTERMISSION) {
+	if(cvars::gameState.ivalue == GS_INTERMISSION) {
+		if(state) {
+			Cmd_IntermissionReady_f(ent);
+		} else {
+			G_MakeUnready(ent);
+		}
+		return;
+	}
+
+	if(cvars::gameState.ivalue == GS_PLAYING) {
 		CP("cpm \"Match is already in progress!\n\"");
 		return;
 	}

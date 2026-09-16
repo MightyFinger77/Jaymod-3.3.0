@@ -216,6 +216,11 @@ vmCvar_t		g_dropAmmo;
 vmCvar_t		g_saveCampaignStats;
 vmCvar_t		g_intermissionTime;
 vmCvar_t		g_intermissionReadyPercent;
+vmCvar_t		g_maxMapsVotedFor;
+vmCvar_t		g_minMapAge;
+vmCvar_t		g_excludedMaps;
+vmCvar_t		g_mapVoteFlags;
+vmCvar_t		g_oss;
 vmCvar_t		g_spectator;
 vmCvar_t		g_spawnInvul;
 vmCvar_t		g_shoveNoZ;
@@ -321,6 +326,13 @@ cvarTable_t		gameCvarTable[] = {
 	{ &g_saveCampaignStats,	"g_saveCampaignStats",	"1",		CVAR_ARCHIVE },
 	{ &g_intermissionTime,	"g_intermissionTime",	"60",		0 },
 	{ &g_intermissionReadyPercent, "g_intermissionReadyPercent", "100", 0 },
+	{ &g_maxMapsVotedFor,	"g_maxMapsVotedFor",	"0",		0 },
+	{ &g_minMapAge,			"g_minMapAge",			"3",		0 },
+	{ &g_excludedMaps,		"g_excludedMaps",		":oasis:goldrush:radar:railgun:fueldump:",		0 },
+	{ &g_mapVoteFlags,		"g_mapVoteFlags",		"20",		0 },
+	/* ET Legacy browser architecture filter. 1=Win32, 256=Win64.
+	 * 3.1.0 pk3 ships both client arches — advertise both so Win64 ETL lists us. */
+	{ &g_oss,				"g_oss",				"257",		CVAR_SERVERINFO, 0, qfalse },
 	{ &g_spectator,			"g_spectator",			"0",		CVAR_ARCHIVE },
 	{ &g_spawnInvul,		"g_spawnInvul",			"3",		CVAR_ARCHIVE },
 	{ &g_shoveNoZ,			"g_shoveNoZ",			"0",		CVAR_ARCHIVE },
@@ -638,14 +650,17 @@ This must be the very first function compiled into the .q3vm file
 */
 extern "C" LF_PUBLIC intptr_t
 vmMain( intptr_t command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6 ) {
+	static qboolean botsNeedInit = qfalse;
 	switch ( command ) {
 	case GAME_INIT:
 		Bot_Interface_InitHandles();
 		G_InitGame( (int)arg0, (int)arg1, (int)arg2 );
-		if (!Bot_Interface_Init())
-			G_Printf(S_COLOR_RED "Unable to Initialize Omni-Bot.^7\n");
+		/* Bind Omni-bot after the world exists, and never from GAME_INIT
+		 * on a map change while the previous qagame is still unmapping. */
+		botsNeedInit = qtrue;
 		return 0;
 	case GAME_SHUTDOWN:
+		botsNeedInit = qfalse;
 		if (!Bot_Interface_Shutdown())
 			G_Printf(S_COLOR_RED "Error shutting down Omni-Bot.^7\n");
 		G_ShutdownGame( (int)arg0 );
@@ -676,6 +691,11 @@ vmMain( intptr_t command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t 
 		ClientCommand( arg0 );
 		return 0;
 	case GAME_RUN_FRAME:
+		if ( botsNeedInit ) {
+			botsNeedInit = qfalse;
+			if (!Bot_Interface_Init())
+				G_Printf(S_COLOR_RED "Unable to Initialize Omni-Bot.^7\n");
+		}
 		G_RunFrame( arg0 );
 		Bot_Interface_Update();
 		return 0;
@@ -1367,8 +1387,8 @@ void G_FindTeams( void ) {
 	for ( i=1, e=g_entities+i ; i < level.num_entities ; i++,e++ ){
 		if (!e->inuse)
 			continue;
-		
-		if (!e->team)
+
+		if (!e->team || !e->classname)
 			continue;
 
 		if (e->flags & FL_TEAMSLAVE)
@@ -1392,7 +1412,7 @@ void G_FindTeams( void ) {
 		{
 			if (!e2->inuse)
 				continue;
-			if (!e2->team)
+			if (!e2->team || !e2->classname)
 				continue;
 			if (e2->flags & FL_TEAMSLAVE)
 				continue;
@@ -1593,7 +1613,7 @@ void G_UpdateCvars( void )
 					}
 
 					if(!level.latchGametype && cvars::gameState.ivalue == GS_PLAYING && 
-					  ( ( ( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_CAMPAIGN ) && (worldspawnflags & NO_GT_WOLF)) ||	
+					  ( ( ( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_CAMPAIGN || g_gametype.integer == GT_WOLF_MAPVOTE ) && (worldspawnflags & NO_GT_WOLF)) ||	
 					  (g_gametype.integer == GT_WOLF_STOPWATCH && (worldspawnflags & NO_STOPWATCH)) ||
 					  (g_gametype.integer == GT_WOLF_LMS && (worldspawnflags & NO_LMS)) )
 					  ) {
@@ -1847,6 +1867,19 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
     }
 
 	G_RegisterCvars();
+
+	/* ETL 2.8x Win64 browser drops servers without OSS_WIN_X86_64 (256).
+	 * Ensure Win32|Win64 even if a config left g_oss at 0 / unset. */
+	{
+		int oss = g_oss.integer;
+		if ( !( oss & 1 ) || !( oss & 256 ) ) {
+			oss |= 1 | 256;
+			trap_Cvar_Set( "g_oss", va( "%i", oss ) );
+			trap_Cvar_Update( &g_oss );
+			G_Printf( "g_oss %i (Win32|Win64 for ET Legacy browser)\n", g_oss.integer );
+		}
+	}
+
     process.init();
     molotov::init();
 	BG_cpuUpdate();
@@ -1861,6 +1894,8 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 
     // Load censor word list
     censorDB.load();
+
+    Enh_Init();
 
     // We guarantee that this array always points a user object.
     for (int i = 0; i < MAX_CLIENTS; i++)
@@ -1885,7 +1920,10 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	G_InitMemory();
 
     // NERVE - SMF - intialize gamestate
-    if (cvars::gameState.ivalue == GS_INITIALIZE)
+    // gameState is a cvar, so intermission from the previous map survives
+    // memset(level) and G_ShutdownGame. Map vote always ends in intermission;
+    // leaving it set skips G_initMatch and can crash post-spawn on the winner.
+    if (cvars::gameState.ivalue == GS_INITIALIZE || cvars::gameState.ivalue == GS_INTERMISSION)
         cvars::gameState.set( cvars::g_warmup.ivalue ? GS_WARMUP : GS_PLAYING );
 
 	// set some level globals
@@ -1977,7 +2015,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 		trap_SetConfigstring( CS_ROUNDSCORES2, va("%i", g_alliedwins.integer ) );
 	}
 
-	if( g_gametype.integer == GT_WOLF ) {
+	if( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_MAPVOTE ) {
 		//bani - #113
 		bani_clearmapxp();
 	}
@@ -2001,6 +2039,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	Q_strncpyz( level.rawmapname, Info_ValueForKey( cs, "mapname" ), sizeof(level.rawmapname) );
 
 	G_ParseCampaigns();
+	G_MapVote_Init();
 	if( g_gametype.integer == GT_WOLF_CAMPAIGN ) {
 		if( g_campaigns[level.currentCampaign].current == 0 || level.newCampaign ) {
 			trap_Cvar_Set( "g_axiswins", "0" );
@@ -2127,6 +2166,8 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 
 	numSplinePaths = 0 ;
 	numPathCorners = 0;
+	memset( splinePaths, 0, sizeof( splinePaths ) );
+	memset( pathCorners, 0, sizeof( pathCorners ) );
 
 	// START	Mad Doctor I changes, 8/21/2002
 	// This needs to be called before G_SpawnEntitiesFromString, or the 
@@ -2170,6 +2211,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 
 	// Link all the splines up
 	BG_BuildSplinePaths();
+	G_Printf( "InitGame: splines linked (%i paths)\n", numSplinePaths );
 
 	// create the camera entity that will communicate with the scripts
 //	G_SpawnScriptCamera();
@@ -2195,6 +2237,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	}
 
 	G_RegisterPlayerClasses();
+	G_Printf( "InitGame: player classes registered\n" );
 
 	// Match init work
 	G_loadMatchGame();
@@ -2235,7 +2278,7 @@ void G_ShutdownGame( int restart ) {
 
 	// Arnout: gametype latching
 	if	( 
-		( ( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_CAMPAIGN ) && (g_entities[ENTITYNUM_WORLD].r.worldflags & NO_GT_WOLF)) ||
+		( ( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_CAMPAIGN || g_gametype.integer == GT_WOLF_MAPVOTE ) && (g_entities[ENTITYNUM_WORLD].r.worldflags & NO_GT_WOLF)) ||
 		(g_gametype.integer == GT_WOLF_STOPWATCH && (g_entities[ENTITYNUM_WORLD].r.worldflags & NO_STOPWATCH)) ||
 		(g_gametype.integer == GT_WOLF_LMS && (g_entities[ENTITYNUM_WORLD].r.worldflags & NO_LMS))		
 		) {
@@ -2292,6 +2335,7 @@ void G_ShutdownGame( int restart ) {
 
     molotov::shutdown();
     process.shutdown();
+    Enh_Shutdown();
 
     if (cvars::g_shutdownExit.ivalue)
         exit( cvars::g_shutdownExit.ivalue );
@@ -2627,8 +2671,11 @@ void MoveClientToIntermission( gentity_t *ent ) {
 	// clean up powerup info
 	// memset( ent->client->ps.powerups, 0, sizeof(ent->client->ps.powerups) );
 
-	ent->client->ps.eFlags = 0;
-	ent->s.eFlags = 0;
+	{
+		const int keepReady = ( ent->client->pers.ready || ( ent->client->ps.eFlags & EF_READY ) ) ? EF_READY : 0;
+		ent->client->ps.eFlags = keepReady;
+		ent->s.eFlags = keepReady;
+	}
 	ent->s.eType = ET_GENERAL;
 	ent->s.modelindex = 0;
 	ent->s.loopSound = 0;
@@ -2715,16 +2762,33 @@ void BeginIntermission( void ) {
 		return;		// already active
 	}
 
-	// Jaybird - Custom intermission time
-	if (g_intermissionTime.integer >= 0) {
-		level.intermissiontime = level.time - ((60 * 1000) - (g_intermissionTime.integer * 1000));
+	// Keep the real start time (ET Legacy). Only the configstring is faked so
+	// the client countdown matches g_intermissionTime instead of a hard 60s.
+	level.intermissiontime = level.time;
+	level.exitLevelTime = 0;
+	{
+		int itime = level.intermissiontime;
+		if ( g_intermissionTime.integer > 0 ) {
+			itime -= ( 60000 - ( g_intermissionTime.integer * 1000 ) );
+		}
+		trap_SetConfigstring( CS_INTERMISSION_START_TIME, va( "%i", itime ) );
 	}
-	else {
-		level.intermissiontime = level.time;
-	}
-
-	trap_SetConfigstring( CS_INTERMISSION_START_TIME, va( "%i", level.intermissiontime ) );
     cvars::gameState.set( GS_INTERMISSION );
+	level.ref_allready = qfalse;
+
+	for ( i = 0; i < level.maxclients; i++ ) {
+		if ( !level.clients[i].pers.connected ) {
+			continue;
+		}
+		level.clients[i].pers.ready = qfalse;
+		level.clients[i].pers.mapVote[0] = 0;
+		level.clients[i].pers.mapVote[1] = 0;
+		level.clients[i].pers.mapVote[2] = 0;
+		level.clients[i].ps.eFlags &= ~EF_READY;
+		g_entities[i].s.eFlags &= ~EF_READY;
+		/* Retag Omni-bots so ready% never counts them. */
+		G_IsBot( &g_entities[i] );
+	}
 
 	FindIntermissionPoint();
 
@@ -2739,12 +2803,121 @@ void BeginIntermission( void ) {
 	// send the current scoring to all clients
 	SendScoreboardMessageToAllClients();
 
+	G_MapVote_BeginIntermission();
+
 	// Display some final statistics
 	G_BinocWar( qtrue );		// Binocular War
 	G_DisplayLastKill();		// Last kill of the map
 	G_LSFinalizeMap();			// Killing spree record
 }
 
+
+/*
+=============
+G_FindMapToken
+
+Pull the bsp name out of a console string like
+"set g_gametype 6; map sniper_lake_b2; set nextmap vstr d3"
+=============
+*/
+static qboolean G_FindMapToken( const char *cmd, char *out, int outSize ) {
+	const char *p = cmd;
+
+	if ( !cmd || !out || outSize < 2 ) {
+		return qfalse;
+	}
+	while ( *p ) {
+		while ( *p == ' ' || *p == '\t' || *p == ';' || *p == '"' ) {
+			p++;
+		}
+		if ( !Q_stricmpn( p, "devmap ", 7 ) ) {
+			p += 7;
+		} else if ( !Q_stricmpn( p, "map ", 4 ) ) {
+			p += 4;
+		} else {
+			while ( *p && *p != ';' ) {
+				p++;
+			}
+			continue;
+		}
+		while ( *p == ' ' || *p == '\t' || *p == '"' ) {
+			p++;
+		}
+		{
+			int i = 0;
+			while ( p[i] && p[i] != ' ' && p[i] != '\t' && p[i] != ';' && p[i] != '"' && i < outSize - 1 ) {
+				out[i] = p[i];
+				i++;
+			}
+			out[i] = '\0';
+			return out[0] ? qtrue : qfalse;
+		}
+	}
+	return qfalse;
+}
+
+/*
+=============
+G_ResolveNextMapName
+
+Follow nextmap / vstr dN cycle to a concrete bsp name. Never returns empty
+if level.rawmapname is set — prevents ExitLevel from clearing intermission
+without a loadable map (ET Legacy stuck-intermission case).
+=============
+*/
+qboolean G_ResolveNextMapName( char *out, int outSize ) {
+	char buf[MAX_STRING_CHARS];
+	char cvarName[MAX_QPATH];
+	const char *cycle;
+	int depth;
+
+	if ( !out || outSize < 2 ) {
+		return qfalse;
+	}
+	out[0] = '\0';
+
+	trap_Cvar_VariableStringBuffer( "nextmap", buf, sizeof( buf ) );
+	for ( depth = 0; depth < 8; depth++ ) {
+		const char *p;
+
+		if ( G_FindMapToken( buf, out, outSize ) ) {
+			return qtrue;
+		}
+		p = buf;
+		while ( *p == ' ' || *p == '\t' ) {
+			p++;
+		}
+		if ( !Q_stricmpn( p, "vstr ", 5 ) ) {
+			int i = 0;
+			p += 5;
+			while ( *p == ' ' || *p == '\t' || *p == '"' ) {
+				p++;
+			}
+			while ( p[i] && p[i] != ' ' && p[i] != '\t' && p[i] != ';' && p[i] != '"' && i < (int)sizeof( cvarName ) - 1 ) {
+				cvarName[i] = p[i];
+				i++;
+			}
+			cvarName[i] = '\0';
+			if ( !cvarName[0] ) {
+				break;
+			}
+			trap_Cvar_VariableStringBuffer( cvarName, buf, sizeof( buf ) );
+			continue;
+		}
+		break;
+	}
+
+	cycle = G_MapVote_NextInPool();
+	if ( cycle && cycle[0] ) {
+		Q_strncpyz( out, cycle, outSize );
+		return qtrue;
+	}
+	if ( level.rawmapname[0] ) {
+		Q_strncpyz( out, level.rawmapname, outSize );
+		return qtrue;
+	}
+	return qfalse;
+}
 
 /*
 =============
@@ -2758,18 +2931,20 @@ or moved to a new level based on the "nextmap" cvar
 void ExitLevel (void) {
 	int		i;
 	gclient_t *cl;
+	char	keepNextmap[MAX_STRING_CHARS];
+
+	if ( level.exitLevelTime && level.time - level.exitLevelTime < 2000 ) {
+		return;
+	}
+	level.exitLevelTime = level.time;
+	trap_Cvar_VariableStringBuffer( "nextmap", keepNextmap, sizeof( keepNextmap ) );
 
 	if( g_gametype.integer == GT_WOLF_CAMPAIGN ) {
 		g_campaignInfo_t *campaign = &g_campaigns[level.currentCampaign];
 
 		if( campaign->current + 1 < campaign->mapCount ) {
 			trap_Cvar_Set( "g_currentCampaignMap", va( "%i", campaign->current + 1 ) );
-#if 0
-			if( g_developer.integer )
-				trap_SendConsoleCommand( EXEC_APPEND, va( "devmap %s\n", campaign->mapnames[campaign->current + 1] ) );
-			else
-#endif
-				trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", campaign->mapnames[campaign->current + 1] ) );
+			trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", campaign->mapnames[campaign->current + 1] ) );
 		} else {
 			char s[MAX_STRING_CHARS];
 			trap_Cvar_VariableStringBuffer( "nextcampaign", s, sizeof(s) );
@@ -2777,24 +2952,43 @@ void ExitLevel (void) {
 			if( *s ) {
 				trap_SendConsoleCommand( EXEC_APPEND, "vstr nextcampaign\n" );
 			} else {
-				// restart the campaign
 				trap_Cvar_Set( "g_currentCampaignMap", "0" );
-#if 0
-				if( g_developer.integer )
-					trap_SendConsoleCommand( EXEC_APPEND, va( "devmap %s\n", campaign->mapnames[0] ) );
-				else
-#endif
-					trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", campaign->mapnames[0] ) );
+				trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", campaign->mapnames[0] ) );
 			}
-
-			// FIXME: do we want to do something else here?
-			//trap_SendConsoleCommand( EXEC_APPEND, "vstr nextmap\n" );
 		}
 	} else if( g_gametype.integer == GT_WOLF_LMS ) {
 		if( level.lmsDoNextMap ) {
 			trap_SendConsoleCommand( EXEC_APPEND, "vstr nextmap\n" );
 		} else {
 			trap_SendConsoleCommand( EXEC_APPEND, "map_restart 0\n" );
+		}
+	} else if( g_gametype.integer == GT_WOLF_MAPVOTE ) {
+		const char *winner = G_MapVote_WinningMap();
+
+		if ( winner && winner[0] ) {
+			/* Someone voted — load that map, keep the cycle pointer intact. */
+			if ( keepNextmap[0] ) {
+				trap_SendConsoleCommand( EXEC_APPEND, va( "map %s; set nextmap \"%s\"\n", winner, keepNextmap ) );
+			} else {
+				trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", winner ) );
+			}
+			G_LogPrintf( "ExitLevel: voted map %s\n", winner );
+		} else if ( keepNextmap[0] ) {
+			/* Nobody voted — run the real rotation (vstr dN). Do NOT extract
+			 * the map and rewrite nextmap: that freezes nextmap on the same
+			 * vstr and reloads the same map forever. */
+			trap_SendConsoleCommand( EXEC_APPEND, "vstr nextmap\n" );
+			G_LogPrintf( "ExitLevel: no votes, vstr nextmap (%s)\n", keepNextmap );
+		} else {
+			char mapName[MAX_QPATH];
+			if ( G_ResolveNextMapName( mapName, sizeof( mapName ) ) &&
+				Q_stricmp( mapName, level.rawmapname ) ) {
+				trap_SendConsoleCommand( EXEC_APPEND, va( "map %s\n", mapName ) );
+				G_LogPrintf( "ExitLevel: nextmap empty, loading %s\n", mapName );
+			} else {
+				trap_SendConsoleCommand( EXEC_APPEND, "map_restart 0\n" );
+				G_LogPrintf( "ExitLevel: nextmap empty, map_restart\n" );
+			}
 		}
 	} else {
 		trap_SendConsoleCommand( EXEC_APPEND, "vstr nextmap\n" );
@@ -3085,7 +3279,42 @@ void LogExit( const char *string ) {
 			trap_Cvar_Set( "g_currentRound", va( "%i", g_currentRound.integer + 1 ) );
 			trap_Cvar_Update( &g_currentRound );
 		}
-	} else if( g_gametype.integer == GT_WOLF ) {
+	} else if( g_gametype.integer == GT_WOLF || g_gametype.integer == GT_WOLF_MAPVOTE ) {
+		char	wcs[MAX_STRING_CHARS];
+		int		winner;
+		int		axisKills = 0, alliedKills = 0;
+
+		/* Sniper / deathmatch-style maps often never set an objective winner,
+		 * so the debriefing always shows "It's a TIE!". That is the round
+		 * result (Axis vs Allies), not the map vote. Fill from team score or
+		 * kills when still undecided. */
+		trap_GetConfigstring( CS_MULTI_MAPWINNER, wcs, sizeof( wcs ) );
+		winner = atoi( Info_ValueForKey( wcs, "winner" ) );
+		if ( winner == -1 ) {
+			if ( level.teamScores[TEAM_AXIS] > level.teamScores[TEAM_ALLIES] ) {
+				winner = 0;
+			} else if ( level.teamScores[TEAM_ALLIES] > level.teamScores[TEAM_AXIS] ) {
+				winner = 1;
+			} else {
+				for ( i = 0; i < level.numConnectedClients; i++ ) {
+					cl = &level.clients[level.sortedClients[i]];
+					if ( cl->sess.sessionTeam == TEAM_AXIS ) {
+						axisKills += cl->sess.kills;
+					} else if ( cl->sess.sessionTeam == TEAM_ALLIES ) {
+						alliedKills += cl->sess.kills;
+					}
+				}
+				if ( axisKills > alliedKills ) {
+					winner = 0;
+				} else if ( alliedKills > axisKills ) {
+					winner = 1;
+				}
+			}
+			if ( winner != -1 ) {
+				Info_SetValueForKey( wcs, "winner", va( "%i", winner ) );
+				trap_SetConfigstring( CS_MULTI_MAPWINNER, wcs );
+			}
+		}
 
 		//bani - #113
 		bani_storemapxp();
@@ -3108,14 +3337,15 @@ wait 10 seconds before going on.
 */
 void CheckIntermissionExit( void ) {
 	static int fActions = 0;
-	qboolean exit = qtrue;
-	int i;
-	// rain - for #105
 	gclient_t *cl;
-	int ready = 0, notReady = 0;
+	int i, ready = 0, readyVoters = 0;
+	qboolean exit = qfalse;
+
+	if ( !level.intermissiontime ) {
+		return;
+	}
 
 	// OSP - end-of-level auto-actions
-	//		  maybe make the weapon stats dump available to single player?
 	if(!(fActions & EOM_WEAPONSTATS) && level.time - level.intermissiontime > 300) {
 		G_matchInfoDump(EOM_WEAPONSTATS);
 		fActions |= EOM_WEAPONSTATS;
@@ -3125,39 +3355,47 @@ void CheckIntermissionExit( void ) {
 		fActions |= EOM_MATCHINFO;
 	}
 
-	for( i = 0; i < level.numConnectedClients; i++ ) {
-		// rain - #105 - spectators and people who are still loading
-		// don't have to be ready at the end of the round.
-		// additionally, make readypercent apply here.
+	/* NoQuarter-style ready count: ignore bots. Jaymod difference: spectators
+	 * DO count (lone human in spec must be able to READY-skip). NQ skips
+	 * ready% entirely for mapvote; we still honor g_intermissionReadyPercent. */
+	if ( level.numConnectedClients ) {
+		for ( i = 0; i < level.numConnectedClients; i++ ) {
+			cl = level.clients + level.sortedClients[i];
+			if ( cl->pers.connected != CON_CONNECTED ) {
+				continue;
+			}
+			if ( G_IsBot( &g_entities[level.sortedClients[i]] ) ) {
+				continue;
+			}
+			readyVoters++;
+			if ( cl->pers.ready ) {
+				ready++;
+			}
+		}
 
-		cl = level.clients + level.sortedClients[i];
+		if ( level.ref_allready ) {
+			level.ref_allready = qfalse;
+			exit = qtrue;
+		} else if ( readyVoters > 0 &&
+			( 100.0f * ( ready / ( readyVoters * 1.0f ) ) ) >= g_intermissionReadyPercent.value ) {
+			exit = qtrue;
+		}
 
-		if ( cl->pers.connected != CON_CONNECTED || cl->sess.sessionTeam == TEAM_SPECTATOR ) {
-			continue;
-		} else if ( cl->pers.ready || ( g_entities[level.sortedClients[i]].r.svFlags & SVF_BOT ) ) {
-			ready++;
-		} else {
-			notReady++;
+		{
+			int wait = g_intermissionTime.integer;
+			if ( wait < 1 ) {
+				wait = 60;
+			}
+			if ( !exit && ( level.time < level.intermissiontime + 1000 * wait ) ) {
+				return;
+			}
 		}
 	}
 
+	ExitLevel();
+}
 
-	// rain - #105 - use the same code as the beginning of round ready to
-	// decide whether enough players are ready to exceed
-	// match_readypercent
-	// Jaybird - untied match_readypercent in favor of g_intermissionreadypercent
-	if( level.ref_allready || ( ( ready + notReady > 0 ) && 100 * ready / ( ready + notReady ) >= g_intermissionReadyPercent.value ) ) {
-		level.ref_allready = qfalse;
-		exit = qtrue;
-	} else {
-		exit = qfalse;
-	}
-
-	// Gordon: changing this to a minute for now
-	if( !exit && (level.time < level.intermissiontime + 60000) ) {
-		return;
-	}
-
+void G_SkipIntermission( void ) {
 	ExitLevel();
 }
 
@@ -3197,6 +3435,23 @@ void CheckExitRules( void ) {
 	// if at the intermission, wait for all non-bots to
 	// signal ready, then go to next level
 	if( cvars::gameState.ivalue == GS_INTERMISSION ) {
+		/* ET Legacy: ExitLevel cleared intermissiontime but the map command
+		 * never took — recover instead of sitting forever with bots moving. */
+		if ( level.intermissiontime == 0 ) {
+			char nextmap[MAX_STRING_CHARS];
+			if ( level.exitLevelTime && level.time - level.exitLevelTime < 3000 ) {
+				return;
+			}
+			G_Printf( S_COLOR_YELLOW "WARNING: failed to load the next map — recovering via nextmap\n" );
+			trap_Cvar_VariableStringBuffer( "nextmap", nextmap, sizeof( nextmap ) );
+			if ( nextmap[0] ) {
+				trap_SendConsoleCommand( EXEC_APPEND, "vstr nextmap\n" );
+			} else {
+				trap_SendConsoleCommand( EXEC_APPEND, "map_restart 0\n" );
+			}
+			level.exitLevelTime = level.time;
+			return;
+		}
 		CheckIntermissionExit ();
 		return;
 	}
@@ -3968,6 +4223,8 @@ void G_RunFrame( int levelTime ) {
 	level.framenum++;
 	level.previousTime = level.time;
 	level.time = levelTime;
+
+	Enh_RunFrame();
 
 	msec = level.time - level.previousTime;
 
