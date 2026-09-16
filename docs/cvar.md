@@ -31,7 +31,13 @@ Console: `lua_status`, `lua_restart`.
 
 ## Added in 3.1.0
 
-EnhMod-in-qagame, Nitmod-style map vote, widescreen HUD.
+EnhMod-in-qagame, Nitmod-style map vote, widescreen HUD, ETL `g_oss` browser bits.
+
+### ET Legacy browser (`g_oss`)
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `g_oss` | `257` | Serverinfo architecture bitmask for ETL’s OSS filter. `1` = Win32, `256` = Win64. qagame registers this as `CVAR_SERVERINFO` and ORs in Win32\|Win64 on init if either bit is missing. You do not need `sets g_oss 257` in `server.cfg` for Win64 clients to list the server. |
 
 ### Map voting (`g_gametype 6`)
 
@@ -353,7 +359,7 @@ Add `g_banner3`, `g_banner4`, … if `g_banners` is higher.
 | `g_gravity` | `800` | `800` | Gravity. |
 | `g_heavyWeaponRestriction` | `100` | `100` | Heavy-weapon percent cap per team. |
 | `g_inactivity` | `0` | `0` | Kick idle players after this many seconds. `0` = off. |
-| `g_intermissionReadyPercent` | `75` | `100` | Percent ready (or voted, on mapvote) to end intermission. |
+| `g_intermissionReadyPercent` | `75` | `100` | Percent of **human** players (incl. spectators) who must READY to end intermission early. Omni-bot clients are ignored. On mapvote with flag `2`, also waits until that percent have voted. |
 | `g_intermissionTime` | `30` | `60` | Intermission length (seconds). Map vote uses this as the vote timer. |
 | `g_ipcomplaintlimit` | `3` | `3` | Unique IPs that can complain about one player. |
 | `g_killSpreeLevels` | `5 10 15 20 25 30` | `""` | Kill-spree thresholds. |

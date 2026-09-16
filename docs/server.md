@@ -164,8 +164,13 @@ set g_maxMapsVotedFor "0"
 | `g_excludedMaps` | `:oasis:goldrush:radar:railgun:fueldump:` | `:bspname:` to hide those maps |
 | `g_mapVoteFlags` | `20` | `1` least-played wins ties, `2` wait until `g_intermissionReadyPercent` have voted, `4` three ranked votes (3/2/1), `8` keep list order, `16` callvote nextmap opens the vote screen |
 | `g_intermissionTime` | `60` | Seconds before the winner loads |
+| `g_intermissionReadyPercent` | `100` | Percent of **human** players who must hit READY (or have voted, if flag `2`) to end intermission early |
 
-No votes → `vstr nextmap`. Map history is stored in `mapvoteinfo.txt` in the jaymod folder.
+**READY / bots:** Intermission READY uses NoQuarter-style `imready` → server `G_MakeReady`. Only **humans** count toward the percent (playing + spectators). Omni-bot clients are ignored so a full bot server cannot block READY. Alone in spec still counts as one human.
+
+**No map votes:** If nobody ranks a map, the server runs `vstr nextmap` (your rotation). It does **not** pick a random ballot map. With votes, the highest-scoring map loads and `nextmap` is left alone.
+
+Map history is stored in `mapvoteinfo.txt` in the jaymod folder.
 
 ## Checklist
 
@@ -173,6 +178,7 @@ No votes → `vstr nextmap`. Map history is stored in `mapvoteinfo.txt` in the j
 - [ ] `jaymod-3.1.0.pk3` in the `jaymod` folder that the server actually searches
 - [ ] `qagame_mp_x64.dll` from this 3.1.0 zip
 - [ ] `+set fs_game jaymod`
+- [ ] After map load, `getinfo` / serverinfo shows `g_oss` with Win64 (e.g. `257`) so 64-bit ETL browsers list you
 - [ ] `g_requireClientVersion 0` unless you control every client pk3
 - [ ] Omni-bot: `omnibot_et_x64.dll` + `omnibot_path` (if you want bots)
 - [ ] Lua: `lua_modules` only if you want scripts

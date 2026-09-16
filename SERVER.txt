@@ -1,0 +1,94 @@
+Jaymod 3.1.0 — 64-bit etlded server files
+========================================
+
+Copy these into your jaymod folder (keep mapscripts, shrubbot.cfg, and user.db):
+
+  jaymod-3.1.0.pk3        required — clients download this; server opens jaymod-3.1.0.dat
+  qagame_mp_x64.dll       required by ET: Legacy 2.85+ etlded.exe
+  jaymod.cfg              sample cvars. exec it from server.cfg.
+                          Copying this zip over a live folder will replace
+                          an existing jaymod.cfg. qagame does not write it.
+  preview.png             logo preview (challenge coin)
+  preview-e.png           alt logo (doorway / J cutout)
+
+EnhMod files: if they are missing, qagame writes the published defaults on first map.
+It will not overwrite files you already have.
+
+Country / GeoIP is optional and not in this zip. Each server operator downloads
+their own free MaxMind GeoLite2 files (https://www.maxmind.com — GeoIP / GeoLite
+→ Download files, binary .mmdb, not CSV). Put them next to qagame. We cannot
+redistribute those files.
+
+  GeoLite2-City.mmdb      country + city (preferred if present)
+  GeoLite2-Country.mmdb   country only (used if City is missing)
+  GeoIP.dat               optional legacy Country DB (fallback)
+
+If both City and Country are present, City is used (it already has country).
+Without a database, connect lines and !country say country unknown.
+
+Connect IP/country/version is not sent to every player. It goes to the server
+console and to clients whose enhmod_level.db (or admin) flags include I.
+<advancedplayerinfo>true</advancedplayerinfo> still has to be on. Add I to
+your admin/superuser flags if this file already existed before 3.1.0.
+
+Optional drop-in EnhMod 1.0.9d files (same names as the old jaymod_enh package):
+
+  ModEnhConfig.xml        spawn loadout / common settings / optional <weaponammo> mag+reserve tiers
+  enhmod_commands.db      custom !commands
+  enhmod_level.db         EnhMod levels + flag letters
+  enhmod_admin.db         GUID → level (create this; not shipped)
+  enhmod_antirush.db      antirush spheres
+  forcecvarfile.cfg       forcecvar / forcecvarex lines
+  GeoLite2-City.mmdb      you download this (country + city)
+  GeoLite2-Country.mmdb   you download this (country only)
+  GeoIP.dat               optional legacy Country DB (fallback)
+
+The pk3 ships both client bitnesses:
+
+  cgame_mp_x86.dll / ui_mp_x86.dll       vanilla ET 2.60b and 32-bit ETL
+  cgame_mp_x64.dll / ui_mp_x64.dll       64-bit ETL clients (also x86_64 names)
+
+Do not put qagame inside the pk3.
+Do not use jaymod_enh.dll — EnhMod is built into this qagame.
+
+Client HUD: jay_fixedAspect 1 (default) = no widescreen stretch. ETL's
+archived cg_fixedAspect 0 is ignored. Set jay_fixedAspect 0 for the old look.
+Centered messages (first blood, center print) use real TTF width.
+
+Spectators can press V for the vsay menu (global vsay). Team / fireteam vsay
+stays off. match_mutespecs still applies.
+
+Map voting (Nitmod-style): set g_gametype 6. Hide stock maps with:
+
+  set g_excludedMaps ":oasis:goldrush:radar:railgun:fueldump:"
+
+Add :battery: to that string if you want Battery hidden too.
+set g_maxMapsVotedFor 0 to list every map that is not excluded, including
+the one just played (max 96).
+!nextmap opens the vote screen. g_xpSave still works.
+READY percent counts humans only (bots ignored). No map votes → nextmap rotation.
+See docs/server.md (Map voting).
+
+ET Legacy 64-bit server browser: this qagame sets g_oss to at least 257
+(Win32|Win64) in serverinfo. You do not need sets g_oss in server.cfg for
+listing. Win64 clients still need this pk3's 64-bit cgame/ui to join.
+
+Lua is optional. Put scripts in jaymod/, jaymod/luascripts/, or jaymod/lua/:
+
+  set lua_modules "example.lua"
+
+Start 64-bit etlded.exe with +set fs_game jaymod
+
+Console: lua_status   lua_restart
+
+Omni-bot (64-bit etlded): copy ETL's legacy/omni-bot folder (must include
+omnibot_et_x64.dll, et/, global_scripts/) and set:
+
+  set omnibot_enable "1"
+  set omnibot_path "C:/path/to/omni-bot"
+
+Do not point at the 32-bit omnibot_et.dll.
+
+Leave g_requireClientVersion 0 if clients still report a 2.2.0 / 2.3.0 / 3.0.0 module version.
+
+Docs in the source tree: README.md, docs/server.md, docs/lua.md, docs/changelog.md.

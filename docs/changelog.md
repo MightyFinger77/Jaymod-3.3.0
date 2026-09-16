@@ -30,7 +30,9 @@ Spectators can open the **V** vsay menu and send global vsay. Team / fireteam vs
 
 `g_gametype 6` is Nitmod/ETPub-style **map voting**: objective play, then an intermission list (Name / Score, scrollbar, `1: VOTE` / `2: VOTE` / `3: VOTE`). Click a map, then a vote button. Rank 1 is worth 3, rank 2 is 2, rank 3 is 1. Map titles with spaces stay on one row. `g_excludedMaps` defaults to `:oasis:goldrush:radar:railgun:fueldump:`. `g_maxMapsVotedFor 0` lists every map that is not excluded, including the one just played. `g_xpSave` still restores XP. `!nextmap` / callvote nextmap open the vote screen instead of skipping it. See [server install](server.md#map-voting).
 
-qagame advertises **`g_oss` ≥ 257** (Win32|Win64) in serverinfo so ET Legacy 2.85+ 64-bit browsers list the server without a config `sets`. See [server install](server.md#et-legacy-64-bit-server-browser-g_oss).
+Intermission **READY** follows NoQuarter’s path (`imready` → `G_MakeReady`). `g_intermissionReadyPercent` is computed from **humans only** (players and spectators); Omni-bot clients do not count. If the mapvote ballot has **no votes**, ExitLevel runs `vstr nextmap` so the configured rotation continues (not a random map from the list).
+
+qagame advertises **`g_oss` ≥ 257** (Win32|Win64) in `CVAR_SERVERINFO` on init so ET Legacy 2.85+ 64-bit browsers list the server without a config `sets g_oss`. Owners can still OR in extra platform bits. Listing and joining are separate: Win64 clients still need the 3.1.0 pk3’s 64-bit `cgame`/`ui`. See [server install](server.md#et-legacy-64-bit-server-browser-g_oss).
 
 Optional `<weaponammo>` in `ModEnhConfig.xml` sets magazine (`maxclip`) and reserve (`maxammo`) caps per weapon. List `<tier>`s in order; the highest matching tier wins. Each `<need>` on a tier is AND. `xp` is that skill’s XP (not total XP). `xp="max"` is the last enabled rung of `g_levels_*`. This is not spawn starting ammo (`<ammo>` / `<ammoclip>` on `<entity>`). If a weapon has tiers, the vanilla skill-1 extra clip at spawn is skipped. Existing `ModEnhConfig.xml` is not overwritten — add the block yourself. See [server install](server.md#weapon-ammo-tiers).
 

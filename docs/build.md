@@ -44,3 +44,5 @@ Produces `qagame.mp.x86_64`, `cgame.mp.x86_64`, `ui.mp.x86_64`. Omni-bot on Linu
 `cmake/project.h.in` sets `JAYMOD_version` / `jaymod-3.1.0` / `jaymod-3.1.0.pk3`. Bump those plus `project/info.db` if you cut a new point release.
 
 `tools/pack-release.ps1` rebuilds 32-bit `cgame`/`ui` and stamps them `Jaymod 3.1.0`. A leftover 2.3.0 / 3.0.0 x86 module aborts in `CG_Init` on 32-bit ETL.
+
+Public source for this line: [MightyFinger77/Jaymod-3.3.0](https://github.com/MightyFinger77/Jaymod-3.3.0) (mod version remains **3.1.0**).

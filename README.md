@@ -13,8 +13,9 @@ Lineage: official **Jaymod 2.2.0** (Jaybird, 2011) → **2.3.0** (RNGesus, 2026)
 | **Omni-bot** | 0.8 game interface + Omni-bot **0.93** `omnibot_et_x64.dll` |
 | **This archive’s binaries** | **Windows x64 only** |
 | **License** | Apache 2.0 + original id Software terms |
+| **Source** | [MightyFinger77/Jaymod-3.3.0](https://github.com/MightyFinger77/Jaymod-3.3.0) |
 
-**Download:** [https://gixclan.net/archive/8875/jaymod-3-0-0](https://gixclan.net/archive/8875/jaymod-3-0-0)
+**Download:** build with `tools/pack-release.ps1` → `jaymod-3.1.0-64bit-lua.zip`, or take a prebuilt pack from your host. Older **3.0.0** archive (no EnhMod): [gixclan jaymod-3-0-0](https://gixclan.net/archive/8875/jaymod-3-0-0).
 
 ## What you get
 
@@ -90,7 +91,8 @@ The API follows the [published ET: Legacy Lua docs](https://etlegacy-lua-docs.re
 - Country/city: not shipped. Each operator downloads their own `GeoLite2-City.mmdb` and/or `GeoLite2-Country.mmdb` from MaxMind and puts it next to `qagame`. City is preferred (includes country). Legacy `GeoIP.dat` still works.
 - Widescreen HUD/UI (`jay_fixedAspect`, default `1`): ETJump-style layout — no stretch, centered menus/limbo/load/exit/tab, TTF in-game text. Centered messages (first blood, center print, objectives) use real glyph width. `0` is the old stretched look. Do not use ETL’s archived `cg_fixedAspect`.
 - Spectators can open the **V** vsay menu and send global vsay. Team / fireteam vsay stays off. `match_mutespecs` still applies.
-- Map voting: `g_gametype 6`. `g_excludedMaps` defaults to `:oasis:goldrush:radar:railgun:fueldump:`. `g_maxMapsVotedFor 0` lists every map that is not excluded, including the one just played. See [server.md](docs/server.md#map-voting).
+- Map voting: `g_gametype 6`. `g_excludedMaps` defaults to `:oasis:goldrush:radar:railgun:fueldump:`. `g_maxMapsVotedFor 0` lists every map that is not excluded, including the one just played. Intermission **READY** counts humans (including spectators); Omni-bot players are ignored. No map votes → `vstr nextmap` (rotation), not a random ballot. See [server.md](docs/server.md#map-voting).
+- ET Legacy **64-bit browser listing**: qagame sets serverinfo **`g_oss` ≥ `257`** (Win32|Win64) so Win64 ETL clients list the server without `sets g_oss` in config. See [server.md](docs/server.md#et-legacy-64-bit-server-browser-g_oss).
 
 ## What 3.0.0 already added
 

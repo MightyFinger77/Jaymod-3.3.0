@@ -1,12 +1,15 @@
 # Fork notes
 
-**Jaymod 3.1.0** is a fork of [RngesusSolutions/jaymod2.2.0](https://github.com/RngesusSolutions/jaymod2.2.0) (Jaymod 2.3.0), itself a maintenance of official 2.2.0. 3.0.0 added Lua and 64-bit ET: Legacy modules. 3.1.0 adds built-in EnhMod, widescreen HUD/UI (real TTF centering), spectator vsay, and optional `<weaponammo>` magazine/reserve tiers in `ModEnhConfig.xml`.
+**Jaymod 3.1.0** (mod / pk3 version) is published from [MightyFinger77/Jaymod-3.3.0](https://github.com/MightyFinger77/Jaymod-3.3.0). It forks [RngesusSolutions/jaymod2.2.0](https://github.com/RngesusSolutions/jaymod2.2.0) (Jaymod 2.3.0), itself a maintenance of official 2.2.0.
 
-User-facing docs live in the wiki-style pages linked from [README.md](README.md):
+Lineage: **2.2.0** → **2.3.0** → **3.0.0** (Lua + 64-bit ETL) → **3.1.0** (EnhMod-in-qagame, widescreen HUD, mapvote READY, `g_oss`).
 
-- [Server install](docs/server.md)
+User-facing docs:
+
+- [Server install](docs/server.md) — install, `g_oss`, map voting, EnhMod, Omni-bot
 - [Lua](docs/lua.md)
-- [Changelog (2.2.0 → 3.1.0)](docs/changelog.md)
+- [Changelog](docs/changelog.md)
+- [Cvars](docs/cvar.md)
 - [Build](docs/build.md)
 
 ## License
