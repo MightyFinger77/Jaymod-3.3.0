@@ -402,14 +402,16 @@ cvarTable_t		gameCvarTable[] = {
     { &g_warnMuteLevel,     "g_warnMuteLevel",      "50",       0 },
     { &g_warnBanLevel,      "g_warnBanLevel",       "100",      0 },
 
-    // Some useful mod-info cvars.
-    // Keep these off CVAR_SERVERINFO. ET: Legacy getinfo is 1024 bytes
-    // and must keep engine keys (protocol=84, gamename). Extra SERVERINFO
-    // keys can truncate the string so a 32-bit ETL client fatals with
+    // mod_binary / mod_url stay off CVAR_SERVERINFO: getinfo is 1024 bytes
+    // and must keep engine keys (protocol=84, gamename). Extra keys can
+    // truncate the string so a 32-bit ETL client fatals with
     // "unsupported protocol: 68, expected 84 (et)".
+    // mod_version is small and ETL's browser shows it next to gamename
+    // (RNGesus "jaymod 2.3.0"); without it the column falls back to
+    // gametype ("jaymod standard").
     { NULL, "mod_binary",  JAYMOD_buildTarget, CVAR_ROM },
     { NULL, "mod_url",     JAYMOD_website,     CVAR_ROM },
-    { NULL, "mod_version", JAYMOD_version,     CVAR_ROM },
+    { NULL, "mod_version", JAYMOD_version,     CVAR_SERVERINFO | CVAR_ROM },
 
 	// don't override the cheat state set by the system
 	{ &g_cheats, "sv_cheats", "", 0, qfalse },
@@ -2937,6 +2939,11 @@ void ExitLevel (void) {
 		return;
 	}
 	level.exitLevelTime = level.time;
+
+	/* pfnShutdown while bots are still CON_CONNECTED. ExitLevel then marks
+	 * everyone CON_CONNECTING and unlinks them; Omni-bot walking that state
+	 * from GAME_SHUTDOWN is the 0xc0000005 after every map change. */
+	Bot_Interface_Shutdown();
 	trap_Cvar_VariableStringBuffer( "nextmap", keepNextmap, sizeof( keepNextmap ) );
 
 	if( g_gametype.integer == GT_WOLF_CAMPAIGN ) {

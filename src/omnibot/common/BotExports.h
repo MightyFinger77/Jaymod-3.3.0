@@ -61,6 +61,7 @@ eomnibot_error Omnibot_LoadLibrary(int version, const char *lib, const char *pat
 eomnibot_error Omnibot_GuardedInitialize(int version);
 void Omnibot_GuardedShutdown(void);
 void Omnibot_FreeLibrary();
+void Bot_ClearVisibleInterface();
 bool IsOmnibotLoaded();
 const char *Omnibot_ErrorString(eomnibot_error err);
 const char *Omnibot_GetLibraryPath();

@@ -5272,6 +5272,14 @@ IEngineInterface *Bot_GetBotVisibleInterface()
 #endif
 }
 
+void Bot_ClearVisibleInterface()
+{
+#if defined(_WIN64)
+	g_etImpl = 0;
+	g_msvcEngine.vptr = 0;
+#endif
+}
+
 void Bot_Interface_InitHandles()
 {
 	for(int i = 0; i < MAX_GENTITIES; ++i)
@@ -5293,6 +5301,10 @@ int Bot_Interface_Init()
 
 	g_GoalSubmitReady = false;
 
+	if (g_InterfaceFunctions) {
+		delete g_InterfaceFunctions;
+		g_InterfaceFunctions = 0;
+	}
 	g_InterfaceFunctions = new ETInterface;
 #if defined(_WIN64)
 	g_etImpl = static_cast<ETInterface *>(g_InterfaceFunctions);
@@ -5347,7 +5359,7 @@ eomnibot_error Omnibot_GuardedInitialize(int version)
 	if (setjmp(g_obJmp) != 0) {
 		InterlockedExchange(&g_obGuard, 0);
 		g_obUpdateDisabled = true;
-		G_Printf(S_COLOR_RED "OMNIBOT: native fault 0x%08lx in pfnInitialize (stale qagame after map change). Bots disabled this map.\n",
+		G_Printf(S_COLOR_RED "OMNIBOT: native fault 0x%08lx in pfnInitialize. Unloading dll; bots disabled this map.\n",
 			(unsigned long)g_obLastCode);
 		g_IsOmnibotLoaded = false;
 		return BOT_ERROR_CANTINITBOT;
@@ -5393,8 +5405,17 @@ void Omnibot_GuardedShutdown(void)
 
 int Bot_Interface_Shutdown()
 {
-	Omnibot_GuardedShutdown();
+	if (g_IsOmnibotLoaded) {
+		G_Printf("OMNIBOT: shutdown\n");
+		Omnibot_GuardedShutdown();
+	}
 	Omnibot_FreeLibrary();
+#if defined(_WIN32)
+	if (g_obVeh) {
+		RemoveVectoredExceptionHandler(g_obVeh);
+		g_obVeh = NULL;
+	}
+#endif
 	return 1;
 }
 
